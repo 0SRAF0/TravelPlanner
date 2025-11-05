@@ -1,7 +1,9 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.system import router as system_router
+from api.auth import router as auth_router
 
 
 app = FastAPI(title="Travel Planer API")
@@ -17,6 +19,7 @@ app.add_middleware(
 
 # Mount routers
 app.include_router(system_router)
+app.include_router(auth_router)
 
 if __name__ == "__main__":
     import uvicorn
