@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from dotenv import load_dotenv
+from database import get_users_collection
+from models import User
 
 load_dotenv()
 
@@ -124,11 +126,63 @@ async def google_auth(token_request: GoogleTokenRequest):
             email_verified=google_user.get("verified_email", False)
         )
         
-        # Step 4: Create or update user in your database
-        # TODO: Implement your database logic here
-        # Example:
-        # user = await create_or_update_user(user_info)
-        # For now, we'll just use the Google user data
+        # Step 4: Create or update user in MongoDB
+        users_collection = get_users_collection()
+        
+        # Check if user already exists
+        existing_user = await users_collection.find_one({"google_id": user_info.id})
+        
+        current_time = datetime.utcnow()
+        
+        if existing_user:
+            # Update existing user
+            update_result = await users_collection.update_one(
+                {"google_id": user_info.id},
+                {
+                    "$set": {
+                        "email": user_info.email,
+                        "name": user_info.name,
+                        "given_name": user_info.given_name,
+                        "family_name": user_info.family_name,
+                        "picture": user_info.picture,
+                        "email_verified": user_info.email_verified,
+                        "updated_at": current_time,
+                        "last_login": current_time
+                    }
+                }
+            )
+            print("💾 DATABASE OPERATION:")
+            print("="*50)
+            print(f"Operation: UPDATE")
+            print(f"Modified Count: {update_result.modified_count}")
+            print(f"Google ID: {user_info.id}")
+            print(f"Email: {user_info.email}")
+            print(f"Name: {user_info.name}")
+            print("="*50 + "\n")
+        else:
+            # Create new user
+            user_doc = User(
+                google_id=user_info.id,
+                email=user_info.email,
+                name=user_info.name,
+                given_name=user_info.given_name,
+                family_name=user_info.family_name,
+                picture=user_info.picture,
+                email_verified=user_info.email_verified,
+                created_at=current_time,
+                updated_at=current_time,
+                last_login=current_time
+            )
+            
+            insert_result = await users_collection.insert_one(user_doc.model_dump())
+            print("💾 DATABASE OPERATION:")
+            print("="*50)
+            print(f"Operation: CREATE")
+            print(f"Inserted ID: {insert_result.inserted_id}")
+            print(f"Google ID: {user_info.id}")
+            print(f"Email: {user_info.email}")
+            print(f"Name: {user_info.name}")
+            print("="*50 + "\n")
         
         # Step 5: Generate JWT token for our application
         jwt_payload = {

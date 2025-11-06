@@ -4,7 +4,7 @@ import { authService } from '../../../services/authService.ts';
 
 /**
  * Authentication Callback Page
- * 
+ *
  * This page handles the OAuth callback from Google.
  * It receives the authorization code, exchanges it for a JWT token,
  * and redirects the user to the appropriate page.
@@ -38,17 +38,17 @@ export const GoogleOAuthCallback = () => {
 
         // Exchange code for JWT token
         const authResponse = await authService.exchangeCodeForToken(code);
-        
+
         // Save token and user info
         authService.saveToken(authResponse.access_token);
         authService.saveUser(authResponse.user);
-        
+
         // Update header by triggering storage event
         window.dispatchEvent(new Event('storage'));
-        
+
         // Redirect to dashboard
         navigate('/dashboard', { replace: true });
-        
+
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to complete authentication';
         setError(errorMessage);
@@ -65,17 +65,17 @@ export const GoogleOAuthCallback = () => {
       <div className="min-h-screen flex items-center justify-center ">
         <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg 
-              className="w-8 h-8 text-red-600" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-8 h-8 text-red-600"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M6 18L18 6M6 6l12 12" 
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
               />
             </svg>
           </div>
@@ -93,7 +93,7 @@ export const GoogleOAuthCallback = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
         <h2 className="text-xl font-semibold text-gray-900 mb-2">
