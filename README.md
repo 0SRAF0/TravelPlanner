@@ -22,9 +22,9 @@
 
 ## Tech Stack (MVP)
 
-- **Backend**: Python FastAPI + PostgreSQL + Redis
+- **Backend**: Python FastAPI + MongoDB + Redis
 - **Agent Framework**: LangChain + LangGraph
-- **LLM**: OpenAI GPT-4 (or Claude)
-- **Frontend**: Next.js (static pages, no WebSocket)
+- **LLM**: OpenAI GPT-4
+- **Frontend**: React.js
 - **Deployment**: Docker Compose on single VM
-- **APIs**: Google Maps (routing), Amadeus (flights) - others mocked
+- **APIs**: Google Maps (routing), Google OAuth (auth), Amadeus (flights) - others mocked
