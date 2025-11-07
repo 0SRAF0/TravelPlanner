@@ -3,15 +3,7 @@ MongoDB Database Configuration and Connection
 """
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.server_api import ServerApi
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# MongoDB Configuration
-MONGODB_URI = os.getenv("MONGODB_URI")
-DATABASE_NAME = "travel_planer"
+from core.config import MONGODB_URI, DATABASE_NAME
 
 # Global database client
 _client = None

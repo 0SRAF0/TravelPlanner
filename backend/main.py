@@ -1,4 +1,3 @@
-import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -6,6 +5,7 @@ from contextlib import asynccontextmanager
 from api.system import router as system_router
 from api.auth import router as auth_router
 from database import test_connection, close_database_connection, init_indexes
+from core.config import APP_NAME, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
 
 
 @asynccontextmanager
@@ -20,12 +20,12 @@ async def lifespan(app: FastAPI):
     await close_database_connection()
 
 
-app = FastAPI(title="Travel Planer API", lifespan=lifespan)
+app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3060"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,4 +37,4 @@ app.include_router(auth_router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8060)
+    uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)

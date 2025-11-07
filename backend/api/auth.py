@@ -3,25 +3,23 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 import httpx
-import os
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-from dotenv import load_dotenv
 from database import get_users_collection
 from models import User
-
-load_dotenv()
+from core.config import (
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI,
+    GOOGLE_TOKEN_URL,
+    GOOGLE_USERINFO_URL,
+    JWT_SECRET,
+    JWT_ALGORITHM,
+    JWT_EXPIRATION_HOURS,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
-
-# Configuration
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI_DEV", "http://localhost:3060/auth/callback")
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-this-in-production")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
 
 # Request/Response Models
 class GoogleTokenRequest(BaseModel):
@@ -40,10 +38,6 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserInfo
-
-# Google OAuth Endpoints
-GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 @router.post("/google", response_model=AuthResponse)
@@ -272,7 +266,9 @@ async def get_auth_config():
     without hardcoding sensitive values.
     """
     if not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+        raise HTTPException(status_code=500, detail="Google OAuth client ID not configured")
+    if not GOOGLE_REDIRECT_URI:
+        raise HTTPException(status_code=500, detail="Google OAuth redirect URI not configured")
     
     return {
         "google_client_id": GOOGLE_CLIENT_ID,
