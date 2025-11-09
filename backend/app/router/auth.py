@@ -5,9 +5,9 @@ from typing import Optional
 import httpx
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-from database import get_users_collection
-from models import User
-from core.config import (
+from app.db.database import get_users_collection
+from app.models.user import User
+from app.core.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI,
