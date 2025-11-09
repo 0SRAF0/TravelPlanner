@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
-from statistics import mean, median, pstdev
 from app.agents.preference_agent import PreferenceAgent, SurveyInput
 from datetime import datetime
 from app.db.database import get_preferences_collection
