@@ -40,6 +40,7 @@ OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4")
 
 # Google AI
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+GOOGLE_AI_MODEL = "gemini-2.5-flash"
 
 # LangChain/LangSmith
 LANGCHAIN_API_KEY = os.environ.get("LANGCHAIN_API_KEY")

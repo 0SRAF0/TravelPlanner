@@ -2,10 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from api.system import router as system_router
-from api.auth import router as auth_router
-from database import test_connection, close_database_connection, init_indexes
-from core.config import APP_NAME, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
+from app.router.system import router as system_router
+from app.router.auth import router as auth_router
+from app.router.perference import router as preference_router
+from app.db.database import test_connection, close_database_connection, init_indexes
+from app.core.config import APP_NAME, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
 
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ app.add_middleware(
 # Mount routers
 app.include_router(system_router)
 app.include_router(auth_router)
+app.include_router(preference_router)
 
 if __name__ == "__main__":
     import uvicorn

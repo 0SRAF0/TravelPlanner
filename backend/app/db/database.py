@@ -3,7 +3,7 @@ MongoDB Database Configuration and Connection
 """
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.server_api import ServerApi
-from core.config import MONGODB_URI, DATABASE_NAME
+from app.core.config import MONGODB_URI, DATABASE_NAME
 
 # Global database client
 _client = None
@@ -41,18 +41,38 @@ def get_users_collection():
     return db.users
 
 
+def get_preferences_collection():
+    """
+    Get the preferences collection from the database
+    """
+    db = get_database()
+    return db.preferences
+
+
 async def init_indexes():
     """
     Initialize database indexes for better query performance
     """
     try:
         users_collection = get_users_collection()
+        preferences_collection = get_preferences_collection()
         
         # Create unique index on google_id
         await users_collection.create_index("google_id", unique=True)
         
         # Create index on email for faster lookups
         await users_collection.create_index("email")
+
+        # Preferences indexes
+        # Unique preference per (group_id, user_id)
+        await preferences_collection.create_index(
+            [("group_id", 1), ("user_id", 1)],
+            unique=True,
+            name="uniq_group_user"
+        )
+        # Helpful single-field indexes
+        await preferences_collection.create_index("user_id")
+        await preferences_collection.create_index("group_id")
         
         print("✅ Database indexes created successfully")
     except Exception as e:

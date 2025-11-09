@@ -94,3 +94,4 @@ jsonschema==4.25.1
 boto3==1.40.37
 pandas==2.3.2
 uvicorn==0.37.0
+sentence-transformers==3.3.1
