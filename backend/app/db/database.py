@@ -16,37 +16,21 @@ def get_database():
     Creates a new connection if one doesn't exist
     """
     global _client, _database
-    
+
     if _database is None:
         if not MONGODB_URI:
             raise ValueError("MONGODB_URI environment variable is not set")
-        
+
         # Create MongoDB client with server API version
         _client = AsyncIOMotorClient(
             MONGODB_URI,
             server_api=ServerApi('1')
         )
         _database = _client[DATABASE_NAME]
-        
+
         print(f"✅ Connected to MongoDB database: {DATABASE_NAME}")
-    
+
     return _database
-
-
-def get_users_collection():
-    """
-    Get the users collection from the database
-    """
-    db = get_database()
-    return db.users
-
-
-def get_preferences_collection():
-    """
-    Get the preferences collection from the database
-    """
-    db = get_database()
-    return db.preferences
 
 
 async def init_indexes():
@@ -56,10 +40,11 @@ async def init_indexes():
     try:
         users_collection = get_users_collection()
         preferences_collection = get_preferences_collection()
-        
+        activities_collection = get_activities_collection()
+
         # Create unique index on google_id
         await users_collection.create_index("google_id", unique=True)
-        
+
         # Create index on email for faster lookups
         await users_collection.create_index("email")
 
@@ -73,7 +58,11 @@ async def init_indexes():
         # Helpful single-field indexes
         await preferences_collection.create_index("user_id")
         await preferences_collection.create_index("trip_id")
-        
+
+        # Activities indexes
+        await activities_collection.create_index("trip_id")
+        await activities_collection.create_index("category")
+
         print("✅ Database indexes created successfully")
     except Exception as e:
         print(f"⚠️  Index creation warning: {e}")
@@ -85,7 +74,7 @@ async def close_database_connection():
     Call this when shutting down the application
     """
     global _client, _database
-    
+
     if _client:
         _client.close()
         _client = None
@@ -107,3 +96,26 @@ async def test_connection():
         print(f"❌ MongoDB connection failed: {e}")
         return False
 
+
+def get_users_collection():
+    """
+    Get the users collection from the database
+    """
+    db = get_database()
+    return db.users
+
+
+def get_preferences_collection():
+    """
+    Get the preferences collection from the database
+    """
+    db = get_database()
+    return db.preferences
+
+
+def get_activities_collection():
+    """
+    Get the activities collection from the database
+    """
+    db = get_database()
+    return db.activities

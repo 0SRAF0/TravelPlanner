@@ -29,6 +29,11 @@ class AgentState(TypedDict, total=False):
       - agent_scratch["itinerary_drafts"] = [...]
 
     This allows unlimited agents to coexist without state conflicts.
+
+    Note:
+    - Task-specific inputs (e.g., destination, hints) should live under
+      agent_data (e.g., agent_data["destination"], agent_data["hints"]) or
+      be passed via the calling context, not as top-level fields here.
     """
     # ========== Core Communication Fields ==========
     messages: Annotated[list, add_messages]

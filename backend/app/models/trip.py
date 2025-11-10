@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 
 
-class TripPlan(BaseModel):
+class Trip(BaseModel):
     """
     Trip Plan model (for future use)
     Stores user travel plans

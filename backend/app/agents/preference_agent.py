@@ -15,11 +15,11 @@ from app.agents.tools import get_all_trip_preferences
 
 AGENT_LABEL = "preference"
 
-
 # ========== Vector Embedding Utilities ==========
 
 # Global embedding model (lazy-loaded)
 _embedding_model = None
+
 
 def get_embedding_model():
     """Lazy-load the sentence transformer model."""
@@ -49,7 +49,7 @@ def embed_text(text: str) -> List[float]:
             return embedding.tolist()
         except Exception as e:
             print(f"[preference] Embedding error: {e}, falling back to hash")
-    
+
     # Fallback: simple hash-based embedding
     return _hash_embed_fallback(text, dim=384)
 
@@ -61,7 +61,7 @@ def _hash_embed_fallback(text: str, dim: int = 384) -> List[float]:
     for char in "/,;:.-()[]{}!?":
         text = text.replace(char, " ")
     tokens = [t for t in text.lower().split() if t]
-    
+
     for tok in tokens:
         h = int(hashlib.md5(tok.encode('utf-8')).hexdigest(), 16)
         i = h % dim
@@ -171,7 +171,7 @@ class PreferenceAgent:
 
     def __init__(self, model_name: Optional[str] = None, dim: Optional[int] = None):
         self.model_name = model_name or "gemini-pro"
-        
+
         # Determine embedding dimension
         if dim is None:
             # Try to get dimension from embedding model
@@ -189,7 +189,7 @@ class PreferenceAgent:
         self.index = VectorIndex(self.dim)
         self.profiles: Dict[Tuple[str, str], UserPreferenceProfile] = {}
         self.trips: Dict[str, List[str]] = {}
-        
+
         # LLM (optional, lazy-loaded)
         self._llm = None
 
@@ -230,7 +230,7 @@ class PreferenceAgent:
             weight = max(0.5, 0.9 - (i * 0.1))
             soft[vibe.lower()] = weight
         return soft
-    
+
     def _normalize_deal_breakers(self, text: str) -> List[str]:
         """
         Normalize deal breaker text into a list of individual deal breakers.
@@ -489,10 +489,10 @@ class PreferenceAgent:
         hard = survey.hard.copy() if survey.hard else {}
         soft = survey.soft.copy() if survey.soft else {}
         summary = survey.text or ""
-        
+
         # Create embedding
         vec = embed_text(summary)
-        
+
         # Create profile
         profile = UserPreferenceProfile(
             trip_id=trip_id,
@@ -503,17 +503,17 @@ class PreferenceAgent:
             vector=vec,
             source="survey"
         )
-        
+
         # Store profile
         key = (trip_id, user_id)
         self.profiles[key] = profile
         self.index.upsert(self._vec_key(trip_id, user_id), vec)
-        
+
         # Update trips
         self.trips.setdefault(trip_id, [])
         if user_id not in self.trips[trip_id]:
             self.trips[trip_id].append(user_id)
-        
+
         return profile
 
     def update(self, trip_id: str, user_id: str, updates: Dict[str, str]) -> UpdateDelta:
@@ -530,19 +530,19 @@ class PreferenceAgent:
         """
         key = (trip_id, user_id)
         profile = self.profiles.get(key)
-        
+
         if not profile:
             raise ValueError(f"No profile found for trip={trip_id}, user={user_id}")
-        
+
         changed = {}
-        
+
         for field_path, new_value in updates.items():
             if field_path.startswith("hard."):
                 field_name = field_path.split(".", 1)[1]
                 old_value = profile.hard.get(field_name, "")
                 profile.hard[field_name] = new_value
                 changed[field_path] = (old_value, new_value)
-                
+
             elif field_path.startswith("soft."):
                 field_name = field_path.split(".", 1)[1]
                 old_value = str(profile.soft.get(field_name, 0.0))
@@ -551,14 +551,14 @@ class PreferenceAgent:
                     changed[field_path] = (old_value, new_value)
                 except ValueError:
                     pass
-        
+
         # Update profile version and timestamp
         profile.version += 1
         profile.updated_at = time.time()
-        
+
         # Store updated profile
         self.profiles[key] = profile
-        
+
         return UpdateDelta(changed=changed)
 
     def query_similar(self, trip_id: str, items: List[ItemCandidate], k: int = 5) -> List[ScoredItem]:
@@ -647,87 +647,3 @@ __all__ = [
     "SurveyInput",
     "UpdateDelta"
 ]
-
-# ========== Self-Test ==========
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Testing Simplified Preference Agent")
-    print("=" * 60)
-
-    agent = PreferenceAgent()
-
-    # Test vector embeddings with semantic similarity
-    print("\n--- Test 1: Semantic Vector Embeddings ---")
-    vec1 = embed_text("adventure hiking mountains")
-    vec2 = embed_text("outdoor activities nature")  # Semantically similar
-    vec3 = embed_text("luxury shopping dining")     # Semantically different
-
-    sim_12 = cosine(vec1, vec2)
-    sim_13 = cosine(vec1, vec3)
-
-    print(f"Adventure/hiking/mountains vs outdoor/activities/nature: {sim_12:.3f}")
-    print(f"Adventure/hiking/mountains vs luxury/shopping/dining: {sim_13:.3f}")
-    
-    # With real semantic embeddings, similar concepts should have higher similarity
-    if sim_12 > sim_13:
-        print("✅ Semantic embeddings working! Similar concepts have higher similarity.")
-    else:
-        print(f"⚠️  Using fallback hash embeddings (similarity may not be semantic)")
-        print(f"   Install sentence-transformers for true semantic similarity.")
-
-    # Test with mock data (no DB needed)
-    print("\n--- Test 2: Manual Profile Creation ---")
-    from app.models.preference import Preference
-
-    # Mock preferences
-    pref1 = Preference(
-        trip_id="test_trip",
-        user_id="user_1",
-        budget_level=3,
-        vibes=["Adventure", "Food"],
-        deal_breaker="No hostels",
-        notes="Love hiking",
-        available_dates=["2024-06-01:2024-06-15"]
-    )
-
-    # Create profile manually
-    hard = agent._normalize_hard(pref1)
-    soft = agent._normalize_soft(pref1.vibes)
-    summary = agent._summarize(pref1)
-    print(f"Summary: {summary}")
-    print(f"Hard: {hard}")
-    print(f"Soft: {soft}")
-    print("✅ Profile creation working!")
-
-    # Test semantic search
-    print("\n--- Test 3: Semantic Search ---")
-    items = [
-        ItemCandidate("1", "Adventure hiking tour in mountains"),
-        ItemCandidate("2", "Luxury spa resort with fine dining"),
-        ItemCandidate("3", "Local food tour with cultural experiences")
-    ]
-
-    # Manually add a profile for testing
-    vec = embed_text(summary)
-    profile = UserPreferenceProfile(
-        trip_id="test_trip",
-        user_id="user_1",
-        hard=hard,
-        soft=soft,
-        summary=summary,
-        vector=vec
-    )
-    agent.profiles[("test_trip", "user_1")] = profile
-    agent.trips["test_trip"] = ["user_1"]
-    agent.index.upsert(agent._vec_key("test_trip", "user_1"), vec)
-
-    recommendations = agent.query_similar("test_trip", items, k=3)
-    print("Recommendations:")
-    for rec in recommendations:
-        item = next(it for it in items if it.id == rec.id)
-        print(f"  {rec.score:.3f} - {item.text}")
-
-    print("\n" + "=" * 60)
-    print("✅ All tests passed!")
-    print("=" * 60)
