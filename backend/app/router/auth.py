@@ -18,7 +18,7 @@ from app.core.config import (
     JWT_EXPIRATION_HOURS,
 )
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
 
 # Request/Response Models
@@ -49,7 +49,7 @@ async def google_auth(token_request: GoogleTokenRequest):
     1. Receive authorization code from frontend
     2. Exchange code for access token with Google
     3. Fetch user information from Google
-    4. Create/update user in database (TODO: implement database)
+    4. Create/update user in database
     5. Generate JWT token for our application
     6. Return JWT and user info to frontend
     """

@@ -29,6 +29,18 @@ ENVIRONMENT=prod uvicorn app.main:app --host 0.0.0.0 --port 8060
 ```
 Use a proper process manager or container/orchestrator for real deployments.
 
+### API Documentation (Swagger)
+Once the server is running, you can access the interactive API documentation at:
+- **Swagger UI**: `http://<your_domain>:8060/`
+
+The Swagger interface provides:
+- Complete API endpoint documentation
+- Interactive testing of all endpoints
+- Request/response schemas
+- Authentication testing capabilities
+
+For local development, access it at `http://localhost:8060/`
+
 ### Tests
 ```bash
 pytest
