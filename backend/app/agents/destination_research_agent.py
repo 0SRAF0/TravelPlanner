@@ -99,11 +99,8 @@ _BUDGET_BANDS: Dict[int, Tuple[Optional[int], Optional[int]]] = {
 	5: (200, None),  # open upper bound
 }
 
-# Destination centroids (minimal seed)
-_DEST_CENTROIDS: Dict[str, Tuple[float, float]] = {
-	"lisbon, portugal": (38.7223, -9.1393),
-	"aveiro, portugal": (40.6405, -8.6538),
-}
+# Destination centroid cache (filled via geocoding at runtime)
+_DEST_CENTROIDS: Dict[str, Tuple[float, float]] = {}
 
 # ====== Prompt ======
 
@@ -114,7 +111,7 @@ Given:
 - A human-readable destination name,
 - Optional hints (radius_km, max_items, preferred_categories),
 produce a compact activity_catalog aligned to group vibes, budget, and party makeup.
-
+  
 Rules:
 - Categories must be one of: Food, Nightlife, Adventure, Culture, Relax, Nature, Other
 - Use tags from the same taxonomy (same words as categories).
@@ -179,12 +176,74 @@ class DestinationResearchAgent:
 			self._llm_unavailable_reason = "No API key found in GOOGLE_AI_API_KEY"
 		self.app = self._build_graph()
 
+	@staticmethod
+	def _resolve_destination_centroid(dest: str) -> Optional[Tuple[float, float]]:
+		"""
+		Resolve a destination string to a (lat, lng) centroid.
+		Strategy:
+		1) OpenStreetMap Nominatim geocoding (best-effort)
+		2) Fallback to any cached value in _DEST_CENTROIDS (if previously resolved)
+		"""
+		if not dest or not isinstance(dest, str):
+			return None
+		key = dest.strip().lower()
+		if not key:
+			return None
+		# Best-effort online geocoding (no dependency beyond requests)
+		try:
+			import requests  # already listed in requirements
+			resp = requests.get(
+				"https://nominatim.openstreetmap.org/search",
+				params={"q": dest, "format": "json", "limit": 1},
+				headers={"User-Agent": "TravelPlaner/1.0 (+CMPE272)"},
+				timeout=5,
+			)
+			if resp.ok:
+				data = resp.json() or []
+				if isinstance(data, list) and data:
+					item = data[0]
+					lat = float(item.get("lat"))
+					lon = float(item.get("lon"))
+					# Cache for future runs
+					_DEST_CENTROIDS[key] = (lat, lon)
+					return (lat, lon)
+		except Exception:
+			# Network/parse failures are tolerated; simply return None
+			pass
+		# Fallback to cached map if present
+		return _DEST_CENTROIDS.get(key)
+
+	@staticmethod
+	def _geocode_place(query: str) -> Optional[Tuple[float, float]]:
+		"""
+		Best-effort geocoding for a place/activity name using Nominatim.
+		Returns (lat, lng) or None.
+		"""
+		if not query or not isinstance(query, str):
+			return None
+		try:
+			import requests
+			resp = requests.get(
+				"https://nominatim.openstreetmap.org/search",
+				params={"q": query, "format": "json", "limit": 1},
+				headers={"User-Agent": "TravelPlaner/1.0 (+CMPE272)"},
+				timeout=5,
+			)
+			if resp.ok:
+				data = resp.json() or []
+				if isinstance(data, list) and data:
+					item = data[0]
+					return (float(item.get("lat")), float(item.get("lon")))
+		except Exception:
+			pass
+		return None
+
 	# ---- Node ----
 	def _build_catalog(self, state: AgentState) -> AgentState:
 		t0 = time.time()
 		agent_data = dict(state.get("agent_data", {}) or {})
 
-		hints = agent_data.get("hints") or {}
+		hints = state.get("hints") or agent_data.get("hints") or {}
 		force = bool((hints or {}).get("force", False))
 		if agent_data.get("activity_catalog") and not force:
 			# Short circuit
@@ -192,7 +251,7 @@ class DestinationResearchAgent:
 
 		# Flexible input locations: top-level or agent_data
 		pref = state.get("preferences_summary") or agent_data.get("preferences_summary")
-		dest = agent_data.get("destination")
+		dest = state.get("destination") or agent_data.get("destination")
 
 		insights: List[str] = []
 		warnings: List[str] = []
@@ -321,14 +380,22 @@ class DestinationResearchAgent:
 
 		# Post-process: determinism and metrics
 		selected = list(result.activity_catalog or [])
-		# Fill in missing trip_id and default coordinates from destination centroid if absent
-		centroid = _DEST_CENTROIDS.get(dest_key)
+		# Fill in missing trip_id and try to geocode coordinates for each activity.
+		# If geocoding fails, default both to destination centroid for map visualization.
+		centroid = DestinationResearchAgent._resolve_destination_centroid(dest)
 		for a in selected:
 			if getattr(a, "trip_id", None) in (None, ""):
 				a.trip_id = trip_id
-			if centroid is not None:
-				# If either coordinate missing, default both to centroid for map visualization
-				if (getattr(a, "lat", None) is None) or (getattr(a, "lng", None) is None):
+			lat_none = (getattr(a, "lat", None) is None)
+			lng_none = (getattr(a, "lng", None) is None)
+			if lat_none or lng_none:
+				# Try to geocode the activity name scoped by destination
+				query = f"{getattr(a, 'name', '')}, {dest}".strip().strip(",")
+				coords = DestinationResearchAgent._geocode_place(query)
+				if coords is not None:
+					a.lat, a.lng = coords
+				elif centroid is not None:
+					# Last resort: use destination centroid so map pins render
 					a.lat, a.lng = centroid
 
 		selected.sort(key=lambda a: (-float(getattr(a, "score", 0.0) or 0.0), getattr(a, "name", "").lower()))

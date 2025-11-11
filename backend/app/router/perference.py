@@ -170,7 +170,7 @@ async def submit_preferences(
     trip_id: Optional[str] = Query(None, description="Trip ID to submit preferences for"),
     destination: Optional[str] = Query(None, description="Destination, e.g., 'Lisbon, Portugal'"),
     radius_km: float = Query(10.0, description="Search radius in km"),
-    max_items: int = Query(20, description="Maximum number of activities to return"),
+	max_items: int = Query(10, description="Maximum number of activities to return"),
     preferred_categories: Optional[List[str]] = Query(None, description="Preferred categories (repeat param)"),
 ):
     """
@@ -256,12 +256,12 @@ async def submit_preferences(
                 trip_doc = None
                 # Prefer ObjectId lookup if possible
                 try:
-                    trip_doc = await db.trip.find_one({"_id": ObjectId(tid)})
+                    trip_doc = await db.trips.find_one({"_id": ObjectId(tid)})
                 except Exception:
                     trip_doc = None
                 # Fallbacks: search by string id fields
                 if trip_doc is None:
-                    trip_doc = await db.trip.find_one({"trip_id": tid}) or await db.trip.find_one({"_id": tid})
+                    trip_doc = await db.trips.find_one({"trip_id": tid}) or await db.trips.find_one({"_id": tid})
                 if trip_doc:
                     destination = trip_doc.get("destination") or destination
                     if destination:
@@ -274,7 +274,7 @@ async def submit_preferences(
             try:
                 import json as _json
                 print("\n" + "=" * 80)
-                print("  PREFERENCE AGENT → DESTINATION RESEARCH (handoff)")
+                print("PREFERENCE AGENT → DESTINATION RESEARCH (handoff)")
                 print("=" * 80)
                 print(f"Trip: {tid}")
                 print(f"Destination: {destination}")
@@ -288,9 +288,11 @@ async def submit_preferences(
             input_state: AgentState = {
                 "messages": [],
                 "trip_id": tid,
-                "agent_data": {"preferences_summary": preferences_summary},
-                "destination": destination,
-                "hints": hints
+				"agent_data": {
+					"preferences_summary": preferences_summary,
+					"destination": destination,
+					"hints": hints
+				}
             }
             output_state = dr_agent.run(dict(input_state))
             agent_data_out = output_state.get("agent_data", {}) or {}
