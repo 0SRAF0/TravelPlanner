@@ -5,8 +5,10 @@ interface ModalProps {
   mask?: boolean;
   backgroundColor?: string;
   width?: string;
+  maxWidth?: string;
   children: React.ReactNode;
   onClose: () => void;
+  unstyled?: boolean; // Allow children to control all styling
 }
 
 export default function Modal({
@@ -15,7 +17,9 @@ export default function Modal({
   mask = true,
   backgroundColor = '#F6F7FA',
   width,
-  children
+  maxWidth,
+  children,
+  unstyled = false,
 }: ModalProps) {
   if (!isOpen) return null;
 
@@ -25,7 +29,8 @@ export default function Modal({
 
   const modalStyle = {
     backgroundColor,
-    ...(width && { width })
+    ...(width && { width }),
+    ...(maxWidth && { maxWidth })
   };
 
   return (
@@ -36,13 +41,22 @@ export default function Modal({
         <div className="absolute inset-0 bg-black/25" onClick={handleOverlayClick} />
       )}
       
-      <div 
-        className="relative bg-white rounded-3xl px-6 py-12 max-w-md w-full mx-4"
-        style={modalStyle}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
+      {unstyled ? (
+        <div 
+          className="relative mx-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      ) : (
+        <div 
+          className="relative bg-white rounded-3xl px-6 py-12 max-w-md w-full mx-4"
+          style={modalStyle}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 }

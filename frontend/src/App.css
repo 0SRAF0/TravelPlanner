@@ -1,5 +1,13 @@
 #root {
   margin: 0 auto;
-  padding: 2rem;
   text-align: center;
+}
+
+.App {
+  min-height: 100vh;
+  background-image: url('../assets/background.png');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
 }

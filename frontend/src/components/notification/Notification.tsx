@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 interface NotificationProps {
   message: string;
-  type?: 'success' | 'error';
+  type?: 'success' | 'error' | 'info' | 'warning';
   isVisible: boolean;
   onClose: () => void;
   duration?: number; // in milliseconds, default 4000ms
@@ -35,11 +35,15 @@ export default function Notification({
   const getTypeStyles = () => {
     switch (type) {
       case 'success':
-        return 'bg-black border-gray-800 text-white';
+        return 'bg-black text-white';
       case 'error':
-        return 'bg-white border-gray-200 text-red-600';
+        return 'bg-white text-danger';
+      case 'info':
+        return 'bg-white text-info';
+      case 'warning':
+        return 'bg-white text-warning';
       default:
-        return 'bg-black border-gray-800 text-white';
+        return 'bg-black text-white';
     }
   };
 

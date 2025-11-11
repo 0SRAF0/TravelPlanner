@@ -9,9 +9,11 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.core.config import GOOGLE_AI_MODEL
 from app.agents.agent_state import AgentState
 from app.agents.preference_agent import PreferenceAgent
+from app.agents.destination_research_agent import DestinationResearchAgent
 
 # --- Instantiate agents ---
 preference_agent = PreferenceAgent()
+destination_research_agent = DestinationResearchAgent()
 
 # --- Worker registry: add new agents here later ---
 WORKERS: Dict[str, Dict[str, str]] = {
@@ -20,10 +22,13 @@ WORKERS: Dict[str, Dict[str, str]] = {
         "node": "preference_agent",
         "desc": "Process and save user travel preferences (budget, vibes, deal breakers)"
     },
+    "destination_researcher": {
+        "node": "destination_research_agent",
+        "desc": "Research destination and generate activity catalog aligned to group preferences"
+    },
     # Future agents:
     # "itinerary_planner": {"node": "itinerary_agent", "desc": "Generate trip itinerary"},
     # "accommodation_finder": {"node": "accommodation_agent", "desc": "Find suitable accommodations"},
-    # "activity_recommender": {"node": "activity_agent", "desc": "Recommend activities and attractions"},
 }
 
 # --- LLM for supervision ---
@@ -47,8 +52,9 @@ Registry (key → capability):
 
 Routing rules:
 1) If trip_id exists and no preferences_summary → preference_processor (fetch and aggregate)
-2) If preferences_summary exists and goal involves planning → itinerary_planner (future)
-3) If all relevant items are done or goal accomplished → end
+2) If preferences_summary exists, destination provided, and no activity_catalog → destination_researcher
+3) If activity_catalog exists and goal involves itinerary → itinerary_planner (future)
+4) If all relevant items are done or goal accomplished → end
 
 Return JSON only.
 """
@@ -61,6 +67,15 @@ def _needs_preference_processing(state: AgentState) -> bool:
     agent_data = state.get("agent_data", {}) or {}
     has_summary = agent_data.get("preferences_summary") is not None
     return bool(trip_id) and not has_summary
+
+
+def _needs_destination_research(state: AgentState) -> bool:
+    """Check if destination research needs to be performed."""
+    agent_data = state.get("agent_data", {}) or {}
+    has_preferences = agent_data.get("preferences_summary") is not None
+    has_catalog = agent_data.get("activity_catalog") is not None
+    has_destination = bool(agent_data.get("destination"))
+    return has_preferences and has_destination and not has_catalog
 
 
 def supervisor_agent(state: AgentState) -> AgentState:
@@ -83,6 +98,8 @@ def supervisor_agent(state: AgentState) -> AgentState:
 
     if _needs_preference_processing(state):
         deterministic_suggestion = "preference_processor"
+    elif _needs_destination_research(state):
+        deterministic_suggestion = "destination_researcher"
 
     # Build LLM prompt with snapshot + registry
     registry_block = "\n".join([f"- {k}: {v['desc']}" for k, v in WORKERS.items()])
@@ -92,8 +109,11 @@ def supervisor_agent(state: AgentState) -> AgentState:
         "trip_id": trip_id,
         "user_id": state.get("user_id"),
         "goal": state.get("goal", ""),
+        "destination": agent_data.get("destination", ""),
         "has_preferences_summary": bool(agent_data.get("preferences_summary")),
+        "has_activity_catalog": bool(agent_data.get("activity_catalog")),
         "needs_preference_processing": _needs_preference_processing(state),
+        "needs_destination_research": _needs_destination_research(state),
         "current_step": steps,
     }
 
@@ -152,10 +172,18 @@ def preference_agent_wrapper(state: AgentState) -> AgentState:
     return result
 
 
+def destination_research_agent_wrapper(state: AgentState) -> AgentState:
+    print("\n[AGENT] Running destination_research_agent...")
+    result = destination_research_agent.app.invoke(state)
+    print(f"[AGENT] destination_research_agent completed.")
+    return result
+
+
 # ---- Build the top-level graph ----
 graph = StateGraph(AgentState)
 graph.add_node("supervisor_agent", supervisor_agent)
 graph.add_node("preference_agent", preference_agent_wrapper)
+graph.add_node("destination_research_agent", destination_research_agent_wrapper)
 
 graph.set_entry_point("supervisor_agent")
 graph.add_conditional_edges(
@@ -163,10 +191,12 @@ graph.add_conditional_edges(
     agent_router,
     {
         "preference_agent": "preference_agent",
+        "destination_research_agent": "destination_research_agent",
         "end": END,
     },
 )
 graph.add_edge("preference_agent", "supervisor_agent")
+graph.add_edge("destination_research_agent", "supervisor_agent")
 
 checkpointer = MemorySaver()
 app = graph.compile(checkpointer=checkpointer)
@@ -220,34 +250,4 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     print(f"{'=' * 60}\n")
 
     return result
-
-
-# --- Demo / Test ---
-if __name__ == "__main__":
-    initial_state: AgentState = {
-        "messages": [HumanMessage(content="I want to plan a trip to Japan")],
-        "trip_id": "trip_123",
-        "user_id": "user_456",
-        "goal": "Fetch and aggregate trip preferences for Japan trip"
-    }
-
-    result = run_orchestrator_agent(initial_state)
-
-    # Display results
-    print("\n" + "=" * 60)
-    print("FINAL RESULTS")
-    print("=" * 60)
-
-    agent_data = result.get('agent_data', {})
-    summary = agent_data.get('preferences_summary')
-    if summary:
-        print(f"\nTrip: {summary.get('trip_id')}")
-        print(f"Members: {summary.get('members')}")
-        print(f"Ready for planning: {summary.get('ready_for_planning')}")
-        print(f"Aggregated vibes: {summary.get('aggregated_vibes')}")
-        print(f"Budget levels: {summary.get('budget_levels')}")
-        print(f"Conflicts: {summary.get('conflicts')}")
-        print(f"Coverage: {summary.get('coverage'):.0%}")
-
-    print("\n" + "=" * 60)
 

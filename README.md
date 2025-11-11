@@ -29,7 +29,7 @@ Agentic planner that gathers preferences, proposes balanced options, checks real
 A coordinated pipeline of specialized agents that turns surveys and chats into a locked plan. 
 
 * **Preference Agent**: embeds group tastes for matching
-* **Destination Research Agent**: surfaces similar places
+* **Destination Research Agent**: generates destination-specific activity catalog and insights
 * **Pricing Agent**: polls flight/hotel APIs in real time
 * **Voting Coordinator**: instant-runoff to reach fairness
 * **Itinerary Agent**: route optimization with maps

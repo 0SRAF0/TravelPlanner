@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuth } from './components/GoogleOAuth.tsx';
 import { authService } from '../../services/authService.ts';
+import logoWhite from '../../../assets/icon-logo-white.svg';
 
 /**
  * Login Page
@@ -32,20 +33,8 @@ export const SignIn = () => {
           {/* Header */}
           <div className="text-center">
             <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-                <svg 
-                  className="w-8 h-8 text-white" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-                  />
-                </svg>
+              <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center">
+                <img src={logoWhite} alt="Travel Planner logo" className="w-8 h-8" />
               </div>
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -100,11 +89,11 @@ export const SignIn = () => {
           <div className="text-center text-sm text-gray-600">
             <p>
               By signing in, you agree to our{' '}
-              <a href="/terms" className="text-blue-600 hover:underline">
+              <a href="/terms" className="text-accent hover:underline">
                 Terms of Service
               </a>{' '}
               and{' '}
-              <a href="/privacy" className="text-blue-600 hover:underline">
+              <a href="/privacy" className="text-accent hover:underline">
                 Privacy Policy
               </a>
             </p>
@@ -121,4 +110,3 @@ export const SignIn = () => {
     </div>
   );
 };
-

@@ -3,6 +3,18 @@ import { useEffect, useState } from 'react';
 import Button from "../button";
 import { authService, type UserInfo } from "../../services/authService.ts";
 
+const maskEmail = (email: string, minLocalLength: number = 12): string => {
+  if (!email) return '';
+  const atIndex = email.indexOf('@');
+  if (atIndex === -1) return email;
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+  if (local.length <= minLocalLength) return email;
+  const head = local.slice(0, 4);
+  const tail = local.slice(-2);
+  return `${head}***${tail}@${domain}`;
+};
+
 export default function Header() {
   const navigate = useNavigate();
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -56,7 +68,7 @@ export default function Header() {
   };
 
   return (
-    <header className="flex justify-between items-center px-6 py-0 bg-white">
+    <header className="flex justify-between items-center px-6 py-6">
       <div className="flex items-center">
         <img
           src="/assets/full-logo.svg"
@@ -106,7 +118,7 @@ export default function Header() {
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50 border border-gray-200">
                 <div className="px-4 py-2 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+                  <p className="text-xs text-gray-500">{maskEmail(user.email)}</p>
                 </div>
                 <button
                   onClick={handleDashboard}

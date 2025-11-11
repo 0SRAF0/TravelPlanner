@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from app.router.system import router as system_router
 from app.router.auth import router as auth_router
 from app.router.perference import router as preference_router
+from app.router.activity import router as activity_router
 from app.db.database import test_connection, close_database_connection, init_indexes
 from app.core.config import APP_NAME, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
 
@@ -36,6 +37,7 @@ app.add_middleware(
 app.include_router(system_router)
 app.include_router(auth_router)
 app.include_router(preference_router)
+app.include_router(activity_router)
 
 if __name__ == "__main__":
     import uvicorn

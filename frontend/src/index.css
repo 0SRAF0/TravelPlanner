@@ -1,5 +1,12 @@
 @import "tailwindcss";
-@tailwind utilities;
+@theme {
+  --color-primary: #63E6BE;
+  --color-secondary: #E2F9F6;
+  --color-accent: #229A92;
+  --color-warning: #FBA700;
+  --color-danger: #D35900;
+  --color-info: #1E82A6;
+}
 
 * {
   font-family: Arial, sans-serif;

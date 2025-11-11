@@ -34,7 +34,7 @@ export const GoogleOAuth = ({ onError }: GoogleLoginProps) => {
     >
       {isLoading ? (
         <>
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-accent rounded-full animate-spin"></div>
           <span className="font-medium text-gray-700">Redirecting...</span>
         </>
       ) : (

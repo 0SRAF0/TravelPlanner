@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -9,7 +10,28 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")  # development, stagi
 
 # === Server Configuration ===
 SERVER_HOST = os.environ.get("SERVER_HOST", "0.0.0.0")
-SERVER_PORT = int(os.environ.get("SERVER_PORT", "8060"))
+
+def _get_int_env(var_name: str, default_value: int) -> int:
+	"""
+	Parse an integer environment variable robustly.
+	- Trims whitespace and trailing semicolons.
+	- Falls back to the first integer found in the string.
+	- Returns the provided default if parsing fails.
+	"""
+	raw = os.environ.get(var_name, str(default_value))
+	text = str(raw).strip().rstrip(";")
+	try:
+		return int(text)
+	except Exception:
+		match = re.search(r"[-+]?\d+", text or "")
+		if match:
+			try:
+				return int(match.group(0))
+			except Exception:
+				pass
+	return int(default_value)
+
+SERVER_PORT = _get_int_env("SERVER_PORT", 8060)
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 
 # === CORS Configuration ===
@@ -31,7 +53,7 @@ GOOGLE_USERINFO_URL = os.environ.get("GOOGLE_USERINFO_URL", "https://www.googlea
 # === JWT Configuration ===
 JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-change-this-in-production")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-JWT_EXPIRATION_HOURS = int(os.environ.get("JWT_EXPIRATION_HOURS", "24"))
+JWT_EXPIRATION_HOURS = _get_int_env("JWT_EXPIRATION_HOURS", 24)
 
 # === AI/LLM API Keys ===
 # OpenAI
@@ -39,7 +61,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4")
 
 # Google AI
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_AI_API_KEY")
 GOOGLE_AI_MODEL = "gemini-2.5-flash"
 
 # LangChain/LangSmith
