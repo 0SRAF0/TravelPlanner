@@ -1,9 +1,48 @@
 import os
 import re
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables with .env, .env.dev/.env.prod support
+def _load_env_files() -> None:
+	"""
+	Load .env files with this precedence:
+	1) Base .env (if present)
+	2) Explicit file via ENV_FILE (e.g., .env.dev or ./config/.env.prod)
+	3) Environment-specific file inferred from ENVIRONMENT/ENV/PYTHON_ENV
+	   - Supports aliases like dev/development, prod/production, stage/staging
+	Note: Existing OS environment variables are never overridden.
+	"""
+	# 1) Base .env
+	base_path = find_dotenv(".env", usecwd=True)
+	if base_path:
+		load_dotenv(base_path, override=False)
+
+	# 2) Explicit file via ENV_FILE
+	explicit = os.environ.get("ENV_FILE")
+	if explicit:
+		explicit_path = explicit if os.path.isabs(explicit) else find_dotenv(explicit, usecwd=True)
+		if explicit_path:
+			load_dotenv(explicit_path, override=False)
+			return
+
+	# 3) Environment-specific file inferred from ENVIRONMENT/ENV/PYTHON_ENV
+	env_name = os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or os.environ.get("PYTHON_ENV")
+	if env_name:
+		slug = str(env_name).strip().lower()
+		alias = {
+			"dev": "development",
+			"prod": "production",
+			"stg": "staging",
+			"test": "test",
+		}
+		resolved = alias.get(slug, slug)
+		for candidate in (f".env.{resolved}", f".env.{slug}"):
+			path = find_dotenv(candidate, usecwd=True)
+			if path:
+				load_dotenv(path, override=False)
+				break
+
+_load_env_files()
 
 # === Environment Configuration ===
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")  # development, staging, production
