@@ -25,7 +25,8 @@ export const activityService = {
       const text = await response.text().catch(() => '');
       throw new Error(text || 'Failed to load activities');
     }
-    return response.json();
+    const json = await response.json();
+    return json?.data ?? [];
   },
 
   async vote(body: VoteRequest): Promise<VoteResponse> {

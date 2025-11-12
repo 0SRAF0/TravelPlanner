@@ -6,11 +6,12 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 from app.db.database import get_activities_collection
 from app.models.activity import Activity
+from app.models.common import APIResponse
 
 router = APIRouter(prefix="/activities", tags=["Activities"])
 
 
-@router.get("/", response_model=List[Activity])
+@router.get("/", response_model=APIResponse)
 async def get_activities(
     trip_id: str = Query(..., description="Trip ID"),
 ):
@@ -29,7 +30,7 @@ async def get_activities(
     activities = await cursor.to_list(length=None)
 
     if not activities:
-      return []
+      return APIResponse(code=0, msg="ok", data=[])
 
     # Convert MongoDB documents to Activity models
     result = []
@@ -45,7 +46,7 @@ async def get_activities(
         print(f"Warning: Could not parse activity document: {e}")
         continue
 
-    return result
+    return APIResponse(code=0, msg="ok", data=result)
 
   except Exception as e:
     print(f"Error fetching activities: {e}")

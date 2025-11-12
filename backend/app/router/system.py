@@ -1,16 +1,17 @@
 from fastapi import APIRouter
+from app.models.common import APIResponse
 
 
 router = APIRouter(tags=["System"])
 
 
-@router.get("/")
+@router.get("/", response_model=APIResponse)
 def root():
-    return {"msg": "Travel Planer API. Visit /signup or /login."}
+    return APIResponse(code=0, msg="ok", data={"msg": "Travel Planer API. Visit /signup or /login."})
 
 
-@router.get("/health")
+@router.get("/health", response_model=APIResponse)
 def health_check():
-    return {"status": "healthy", "service": "travel_planer-server"}
+    return APIResponse(code=0, msg="ok", data={"status": "healthy", "service": "travel_planer-server"})
 
 

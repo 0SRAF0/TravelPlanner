@@ -1,12 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 import httpx
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from app.db.database import get_users_collection
 from app.models.user import User
+from app.models.common import APIResponse
 from app.core.config import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
@@ -21,27 +21,10 @@ from app.core.config import (
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
 
-# Request/Response Models
-class GoogleTokenRequest(BaseModel):
-    code: str
-
-class UserInfo(BaseModel):
-    id: str
-    email: str
-    name: str
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
-    picture: Optional[str] = None
-    email_verified: bool = False
-
-class AuthResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserInfo
-
-
-@router.post("/google", response_model=AuthResponse)
-async def google_auth(token_request: GoogleTokenRequest):
+@router.post("/google", response_model=APIResponse)
+async def google_auth(
+    code: str = Query(..., description="Authorization code returned from Google OAuth")
+):
     """
     Exchange Google authorization code for access token and user info
     
@@ -57,7 +40,7 @@ async def google_auth(token_request: GoogleTokenRequest):
     print("\n" + "="*50)
     print("📥 RECEIVED DATA FROM FRONTEND:")
     print("="*50)
-    print(f"Authorization Code: {token_request.code[:20]}..." if len(token_request.code) > 20 else f"Authorization Code: {token_request.code}")
+    print(f"Authorization Code: {code[:20]}..." if len(code) > 20 else f"Authorization Code: {code}")
     print("="*50 + "\n")
     
     try:
@@ -66,7 +49,7 @@ async def google_auth(token_request: GoogleTokenRequest):
             token_response = await client.post(
                 GOOGLE_TOKEN_URL,
                 data={
-                    "code": token_request.code,
+                    "code": code,
                     "client_id": GOOGLE_CLIENT_ID,
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "redirect_uri": GOOGLE_REDIRECT_URI,
@@ -110,61 +93,61 @@ async def google_auth(token_request: GoogleTokenRequest):
             print("="*50 + "\n")
             
         # Step 3: Create user info object
-        user_info = UserInfo(
-            id=google_user["id"],
-            email=google_user["email"],
-            name=google_user.get("name", ""),
-            given_name=google_user.get("given_name"),
-            family_name=google_user.get("family_name"),
-            picture=google_user.get("picture"),
-            email_verified=google_user.get("verified_email", False)
-        )
+        user_info: Dict[str, Any] = {
+            "id": google_user["id"],
+            "email": google_user["email"],
+            "name": google_user.get("name", ""),
+            "given_name": google_user.get("given_name"),
+            "family_name": google_user.get("family_name"),
+            "picture": google_user.get("picture"),
+            "email_verified": google_user.get("verified_email", False),
+        }
         
         # Step 4: Create or update user in MongoDB using User model
         users_collection = get_users_collection()
         
         # Check if user already exists
-        existing_user = await users_collection.find_one({"google_id": user_info.id})
+        existing_user = await users_collection.find_one({"google_id": user_info["id"]})
         
         current_time = datetime.utcnow()
         
         if existing_user:
             # Update existing user using User model for validation
             user_doc = User(
-                google_id=user_info.id,
-                email=user_info.email,
-                name=user_info.name,
-                given_name=user_info.given_name,
-                family_name=user_info.family_name,
-                picture=user_info.picture,
-                email_verified=user_info.email_verified,
+                google_id=user_info["id"],
+                email=user_info["email"],
+                name=user_info["name"],
+                given_name=user_info.get("given_name"),
+                family_name=user_info.get("family_name"),
+                picture=user_info.get("picture"),
+                email_verified=user_info.get("email_verified", False),
                 created_at=existing_user.get("created_at", current_time),
                 updated_at=current_time,
                 last_login=current_time
             )
             
             update_result = await users_collection.update_one(
-                {"google_id": user_info.id},
+                {"google_id": user_info["id"]},
                 {"$set": user_doc.model_dump(exclude={"created_at"})}
             )
             print("💾 DATABASE OPERATION:")
             print("="*50)
             print(f"Operation: UPDATE")
             print(f"Modified Count: {update_result.modified_count}")
-            print(f"Google ID: {user_info.id}")
-            print(f"Email: {user_info.email}")
-            print(f"Name: {user_info.name}")
+            print(f"Google ID: {user_info['id']}")
+            print(f"Email: {user_info['email']}")
+            print(f"Name: {user_info['name']}")
             print("="*50 + "\n")
         else:
             # Create new user using User model
             user_doc = User(
-                google_id=user_info.id,
-                email=user_info.email,
-                name=user_info.name,
-                given_name=user_info.given_name,
-                family_name=user_info.family_name,
-                picture=user_info.picture,
-                email_verified=user_info.email_verified,
+                google_id=user_info["id"],
+                email=user_info["email"],
+                name=user_info["name"],
+                given_name=user_info.get("given_name"),
+                family_name=user_info.get("family_name"),
+                picture=user_info.get("picture"),
+                email_verified=user_info.get("email_verified", False),
                 created_at=current_time,
                 updated_at=current_time,
                 last_login=current_time
@@ -175,17 +158,17 @@ async def google_auth(token_request: GoogleTokenRequest):
             print("="*50)
             print(f"Operation: CREATE")
             print(f"Inserted ID: {insert_result.inserted_id}")
-            print(f"Google ID: {user_info.id}")
-            print(f"Email: {user_info.email}")
-            print(f"Name: {user_info.name}")
+            print(f"Google ID: {user_info['id']}")
+            print(f"Email: {user_info['email']}")
+            print(f"Name: {user_info['name']}")
             print("="*50 + "\n")
         
         # Step 5: Generate JWT token for our application
         jwt_payload = {
-            "sub": user_info.id,  # Subject (user ID)
-            "email": user_info.email,
-            "name": user_info.name,
-            "picture": user_info.picture,
+            "sub": user_info["id"],  # Subject (user ID)
+            "email": user_info["email"],
+            "name": user_info["name"],
+            "picture": user_info.get("picture"),
             "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
         }
         
@@ -195,14 +178,19 @@ async def google_auth(token_request: GoogleTokenRequest):
         print("📤 SENDING RESPONSE TO FRONTEND:")
         print("="*50)
         print(f"JWT Token: {jwt_token[:30]}...{jwt_token[-20:] if len(jwt_token) > 50 else jwt_token[30:]}")
-        print(f"User ID: {user_info.id}")
-        print(f"User Email: {user_info.email}")
-        print(f"User Name: {user_info.name}")
+        print(f"User ID: {user_info['id']}")
+        print(f"User Email: {user_info['email']}")
+        print(f"User Name: {user_info['name']}")
         print("="*50 + "\n")
         
-        return AuthResponse(
-            access_token=jwt_token,
-            user=user_info
+        return APIResponse(
+            code=0,
+            msg="ok",
+            data={
+                "access_token": jwt_token,
+                "token_type": "bearer",
+                "user": user_info
+            }
         )
         
     except HTTPException:
@@ -211,7 +199,7 @@ async def google_auth(token_request: GoogleTokenRequest):
         raise HTTPException(status_code=500, detail=f"Authentication failed: {str(e)}")
 
 
-@router.get("/me", response_model=UserInfo)
+@router.get("/me", response_model=APIResponse)
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Get current authenticated user from JWT token
@@ -228,15 +216,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if exp and datetime.utcnow().timestamp() > exp:
             raise HTTPException(status_code=401, detail="Token has expired")
         
-        user_info = UserInfo(
-            id=payload["sub"],
-            email=payload["email"],
-            name=payload["name"],
-            picture=payload.get("picture"),
-            email_verified=True
-        )
+        user_info = {
+            "id": payload["sub"],
+            "email": payload["email"],
+            "name": payload["name"],
+            "picture": payload.get("picture"),
+            "email_verified": True
+        }
         
-        return user_info
+        return APIResponse(code=0, msg="ok", data=user_info)
         
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
@@ -244,7 +232,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=APIResponse)
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
     Logout endpoint
@@ -256,10 +244,10 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
     - Adding token to blacklist (if implemented)
     """
     # TODO: Implement token blacklist if needed
-    return {"message": "Logged out successfully"}
+    return APIResponse(code=0, msg="Logged out successfully")
 
 
-@router.get("/config")
+@router.get("/config", response_model=APIResponse)
 async def get_auth_config():
     """
     Get public OAuth configuration for frontend
@@ -272,9 +260,13 @@ async def get_auth_config():
     if not GOOGLE_REDIRECT_URI:
         raise HTTPException(status_code=500, detail="Google OAuth redirect URI not configured")
     
-    return {
-        "google_client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "scopes": ["openid", "email", "profile"]
-    }
+    return APIResponse(
+        code=0,
+        msg="ok",
+        data={
+            "google_client_id": GOOGLE_CLIENT_ID,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "scopes": ["openid", "email", "profile"]
+        }
+    )
 

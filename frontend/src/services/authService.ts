@@ -30,20 +30,16 @@ export const authService = {
    * Exchange Google authorization code for JWT token
    */
   async exchangeCodeForToken(code: string): Promise<AuthResponse> {
-    const response = await fetch(API.auth.google, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    });
+    const url = `${API.auth.google}?code=${encodeURIComponent(code)}`;
+    const response = await fetch(url, { method: 'POST' });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to authenticate');
+      const error = await response.json().catch(() => null);
+      throw new Error(error?.detail || 'Failed to authenticate');
     }
 
-    return response.json();
+    const json = await response.json();
+    return json?.data as AuthResponse;
   },
 
   /**
@@ -60,7 +56,8 @@ export const authService = {
       throw new Error('Failed to get user info');
     }
 
-    return response.json();
+    const json = await response.json();
+    return json?.data as UserInfo;
   },
 
   /**
@@ -73,7 +70,8 @@ export const authService = {
       throw new Error('Failed to get auth config');
     }
     
-    return response.json();
+    const json = await response.json();
+    return json?.data as AuthConfig;
   },
 
   /**

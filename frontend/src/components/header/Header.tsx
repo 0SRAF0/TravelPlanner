@@ -19,14 +19,19 @@ export default function Header() {
   const navigate = useNavigate();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   // Fix Google profile picture URL to include size parameter
   const getProfilePicture = (picture?: string) => {
     if (!picture) return null;
+    console.log('Original picture URL:', picture);
     // Google profile images need size parameter (e.g., =s96-c)
     if (picture.includes('googleusercontent.com') && picture.endsWith('=s')) {
-      return `${picture}96-c`; // Add 96x96 size
+      const fixedUrl = `${picture}96-c`;
+      console.log('Fixed picture URL:', fixedUrl);
+      return fixedUrl;
     }
+    console.log('Using picture URL as-is:', picture);
     return picture;
   };
 
@@ -34,7 +39,9 @@ export default function Header() {
     // Check if user is authenticated on component mount
     const loadUser = () => {
       const userData = authService.getUser();
+      console.log('Loaded user data:', userData);
       setUser(userData);
+      setImageLoadError(false);
     };
 
     loadUser();
@@ -85,14 +92,15 @@ export default function Header() {
               onClick={() => setShowDropdown(!showDropdown)}
               className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
             >
-              {getProfilePicture(user.picture) ? (
+              {getProfilePicture(user.picture) && !imageLoadError ? (
                 <img
                   src={getProfilePicture(user.picture)!}
                   alt={user.name}
                   className="w-8 h-8 rounded-full"
                   onError={(e) => {
                     // Fallback to initials if image fails to load
-                    e.currentTarget.style.display = 'none';
+                    console.error('Image failed to load:', e.currentTarget.src);
+                    setImageLoadError(true);
                   }}
                 />
               ) : (

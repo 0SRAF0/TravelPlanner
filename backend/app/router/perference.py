@@ -4,11 +4,12 @@ from typing import Dict, List, Optional, Tuple, Any
 from app.agents.preference_agent import PreferenceAgent, SurveyInput
 from datetime import datetime
 from app.db.database import get_preferences_collection, get_database, get_activities_collection
-from app.models.preference import Preference
+from app.models.preference import Preference as PreferenceDoc
 from app.models.activity import Activity
 from app.agents.destination_research_agent import DestinationResearchAgent
 from app.agents.agent_state import AgentState
 from bson import ObjectId
+from app.models.common import APIResponse
 
 router = APIRouter(prefix="/preferences", tags=["Preferences"])
 
@@ -27,55 +28,14 @@ _VIBE_MAP: Dict[str, str] = {
 }
 
 
-# Request/Response Models
-class PreferenceRequest(BaseModel):
-  """Request model for adding/updating preferences"""
-  trip_id: Optional[str] = None
+class Preference(BaseModel):
+  trip_id: str
   user_id: str
   budget_level: Optional[int] = Field(default=None, ge=1, le=4, description="1=Budget, 2=Moderate, 3=Comfort, 4=Luxury")
   vibes: List[str] = Field(default_factory=list, description="Up to 6 cards: Adventure, Food, Nightlife, Culture, Relax, Nature")
   deal_breaker: Optional[str] = None
   notes: Optional[str] = None
   available_dates: List[str] = Field(default_factory=list, description="Available date ranges (ISO format)")
-
-
-class PreferenceResponse(BaseModel):
-  """Response after adding/updating a preference"""
-  success: bool
-  user_id: str
-  trip_id: str
-  message: str = "Preference saved successfully"
-
-
-class SubmitResponse(BaseModel):
-  """Response after submitting preferences to agent"""
-  success: bool
-  trip_id: str
-  preferences_ingested: int
-  message: str = "Preferences submitted to agent successfully"
-
-
-class TripAggregateResponse(BaseModel):
-  """Aggregated preferences for a trip"""
-  trip_id: str
-  members: List[str]
-  member_count: int
-  coverage: float
-  ready_for_options: bool
-  soft_preferences: Dict[str, float]
-  hard_constraints: Dict[str, List[str]]
-  conflicts: List[Dict[str, str]]
-
-
-class UserProfileResponse(BaseModel):
-  """Individual user preference profile"""
-  user_id: str
-  trip_id: str
-  hard_constraints: Dict[str, str]
-  soft_preferences: Dict[str, float]
-  summary: str
-  vector_id: str
-  updated_at: float
 
 
 def _scorecard_from_vibes(vibes: List[str]) -> Dict[str, float]:
@@ -96,12 +56,12 @@ def _scorecard_from_vibes(vibes: List[str]) -> Dict[str, float]:
   return out
 
 
-@router.post("/", status_code=201, response_model=PreferenceResponse)
-async def add_preference(body: PreferenceRequest):
+@router.post("/", status_code=201, response_model=APIResponse)
+async def add_preference(body: Preference):
   """
   Add or update a user's preference in the database .
   """
-  tid = body.trip_id or _TRIP_ID
+  tid = body.trip_id
   uid = body.user_id
 
   col = get_preferences_collection()
@@ -114,7 +74,7 @@ async def add_preference(body: PreferenceRequest):
 
   if existing_preference:
     # Update existing preference using Preference model
-    preference_doc = Preference(
+    preference_doc = PreferenceDoc(
       trip_id=tid,
       user_id=uid,
       budget_level=body.budget_level,
@@ -132,7 +92,7 @@ async def add_preference(body: PreferenceRequest):
     )
   else:
     # Create new preference using Preference model
-    preference_doc = Preference(
+    preference_doc = PreferenceDoc(
       trip_id=tid,
       user_id=uid,
       budget_level=body.budget_level,
@@ -147,17 +107,21 @@ async def add_preference(body: PreferenceRequest):
     await col.insert_one(preference_doc.model_dump())
 
   message = f"Preference {'updated' if is_update else 'created'} successfully"
-  return PreferenceResponse(
-    success=True,
-    user_id=uid,
-    trip_id=tid,
-    message=message
+  return APIResponse(
+    code=0,
+    msg="ok",
+    data={
+      "success": True,
+      "user_id": uid,
+      "trip_id": tid,
+      "message": message
+    }
   )
 
 
-@router.post("/submit", response_model=SubmitResponse)
+@router.post("/submit", response_model=APIResponse)
 async def submit_preferences(
-    trip_id: Optional[str] = Query(None, description="Trip ID"),
+    trip_id: str = Query(..., description="Trip ID"),
     radius_km: float = Query(10.0, description="Search radius in km"),
     max_items: int = Query(10, description="Maximum activities"),
     preferred_categories: Optional[List[str]] = Query(None, description="Preferred categories"),
@@ -165,7 +129,7 @@ async def submit_preferences(
   """
   Submit all preferences for a trip to the agent for aggregation.
   """
-  tid = trip_id or _TRIP_ID
+  tid = trip_id
 
   # Fetch all preferences for this trip from the database
   col = get_preferences_collection()
@@ -344,14 +308,18 @@ async def submit_preferences(
     # Do not fail the submit call if the research step fails; just log it.
     print(f"[submit_preferences] Warning: downstream generation failed: {e}")
 
-  return SubmitResponse(
-    success=True,
-    trip_id=tid,
-    preferences_ingested=ingested_count
+  return APIResponse(
+    code=0,
+    msg="ok",
+    data={
+      "success": True,
+      "trip_id": tid,
+      "preferences_ingested": ingested_count
+    }
   )
 
 
-@router.get("/aggregate", response_model=TripAggregateResponse)
+@router.get("/aggregate", response_model=APIResponse)
 async def get_trip_aggregate(
     trip_id: Optional[str] = Query(None, description="Trip ID")
 ):
@@ -376,19 +344,23 @@ async def get_trip_aggregate(
     for key, reason in agg.conflicts
   ]
 
-  return TripAggregateResponse(
-    trip_id=agg.trip_id,
-    members=agg.members,
-    member_count=len(agg.members),
-    coverage=agg.coverage,
-    ready_for_options=agg.ready_for_options,
-    soft_preferences=agg.soft_mean,
-    hard_constraints=agg.hard_union,
-    conflicts=conflicts
+  return APIResponse(
+    code=0,
+    msg="ok",
+    data={
+      "trip_id": agg.trip_id,
+      "members": agg.members,
+      "member_count": len(agg.members),
+      "coverage": agg.coverage,
+      "ready_for_options": agg.ready_for_options,
+      "soft_preferences": agg.soft_mean,
+      "hard_constraints": agg.hard_union,
+      "conflicts": conflicts
+    }
   )
 
 
-@router.get("/user", response_model=UserProfileResponse)
+@router.get("/user", response_model=APIResponse)
 async def get_user_preference(
     user_id: str = Query(..., description="User ID"),
     trip_id: Optional[str] = Query(None, description="Trip ID"),
@@ -437,12 +409,16 @@ async def get_user_preference(
   # Get updated timestamp
   updated_at = pref_doc.get("updated_at", datetime.utcnow()).timestamp()
 
-  return UserProfileResponse(
-    user_id=user_id,
-    trip_id=tid,
-    hard_constraints=hard,
-    soft_preferences=scorecard,
-    summary=summary,
-    vector_id=_agent._vec_key(tid, user_id),
-    updated_at=updated_at
+  return APIResponse(
+    code=0,
+    msg="ok",
+    data={
+      "user_id": user_id,
+      "trip_id": tid,
+      "hard_constraints": hard,
+      "soft_preferences": scorecard,
+      "summary": summary,
+      "vector_id": _agent._vec_key(tid, user_id),
+      "updated_at": updated_at
+    }
   )
