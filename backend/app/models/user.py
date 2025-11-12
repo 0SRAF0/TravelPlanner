@@ -1,9 +1,10 @@
 """
 Database Models for MongoDB Collections
 """
-from pydantic import BaseModel, Field
-from typing import Optional
+
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class User(BaseModel):
@@ -11,18 +12,25 @@ class User(BaseModel):
     User model for MongoDB storage
     Stores user information from Google OAuth
     """
+
     google_id: str = Field(..., description="Google user ID (unique identifier)")
     email: str = Field(..., description="User email address")
     name: str = Field(..., description="User full name")
-    given_name: Optional[str] = Field(None, description="User first name")
-    family_name: Optional[str] = Field(None, description="User last name")
-    picture: Optional[str] = Field(None, description="URL to user profile picture")
+    given_name: str | None = Field(None, description="User first name")
+    family_name: str | None = Field(None, description="User last name")
+    picture: str | None = Field(None, description="URL to user profile picture")
     email_verified: bool = Field(default=False, description="Whether email is verified")
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Account creation timestamp")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
-    last_login: datetime = Field(default_factory=datetime.utcnow, description="Last login timestamp")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Account creation timestamp"
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Last update timestamp"
+    )
+    last_login: datetime = Field(
+        default_factory=datetime.utcnow, description="Last login timestamp"
+    )
 
     class Config:
         json_schema_extra = {
@@ -36,6 +44,6 @@ class User(BaseModel):
                 "email_verified": True,
                 "created_at": "2024-01-01T00:00:00",
                 "updated_at": "2024-01-01T00:00:00",
-                "last_login": "2024-01-01T00:00:00"
+                "last_login": "2024-01-01T00:00:00",
             }
         }

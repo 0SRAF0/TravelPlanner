@@ -1,30 +1,28 @@
 # orchestrator_agent.py - Multi-agent orchestrator for travel planner
-from typing import Dict, Literal, Optional
-from pydantic.v1 import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, AIMessage
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from pydantic.v1 import BaseModel, Field
 
-from app.core.config import GOOGLE_AI_MODEL
 from app.agents.agent_state import AgentState
-from app.agents.preference_agent import PreferenceAgent
 from app.agents.destination_research_agent import DestinationResearchAgent
+from app.agents.preference_agent import PreferenceAgent
+from app.core.config import GOOGLE_AI_MODEL
 
 # --- Instantiate agents ---
 preference_agent = PreferenceAgent()
 destination_research_agent = DestinationResearchAgent()
 
 # --- Worker registry: add new agents here later ---
-WORKERS: Dict[str, Dict[str, str]] = {
+WORKERS: dict[str, dict[str, str]] = {
     # key -> graph node name + description
     "preference_processor": {
         "node": "preference_agent",
-        "desc": "Process and save user travel preferences (budget, vibes, deal breakers)"
+        "desc": "Process and save user travel preferences (budget, vibes, deal breakers)",
     },
     "destination_researcher": {
         "node": "destination_research_agent",
-        "desc": "Research destination and generate activity catalog aligned to group preferences"
+        "desc": "Research destination and generate activity catalog aligned to group preferences",
     },
     # Future agents:
     # "itinerary_planner": {"node": "itinerary_agent", "desc": "Generate trip itinerary"},
@@ -94,7 +92,7 @@ def supervisor_agent(state: AgentState) -> AgentState:
         }
 
     # Fast guardrail (deterministic suggestion)
-    deterministic_suggestion: Optional[str] = None
+    deterministic_suggestion: str | None = None
 
     if _needs_preference_processing(state):
         deterministic_suggestion = "preference_processor"
@@ -129,8 +127,10 @@ History:
 """
 
     choice = llm.with_structured_output(SupervisorChoice).invoke(
-        [{"role": "system", "content": SUPERVISOR_SYS.format(registry_block=registry_block)},
-         {"role": "user", "content": user_prompt}]
+        [
+            {"role": "system", "content": SUPERVISOR_SYS.format(registry_block=registry_block)},
+            {"role": "user", "content": user_prompt},
+        ]
     )
 
     next_task = choice.next_task.strip()
@@ -142,14 +142,18 @@ History:
     # Log supervisor decision
     print(f"\n[SUPERVISOR - Step {steps}]")
     print(f"  Next task: {next_task}")
-    print(f"  Reason: {choice.reason if next_task == choice.next_task else f'LLM proposed {choice.next_task}; coerced to {next_task}.'}")
+    print(
+        f"  Reason: {choice.reason if next_task == choice.next_task else f'LLM proposed {choice.next_task}; coerced to {next_task}.'}"
+    )
     if deterministic_suggestion:
         print(f"  Deterministic suggestion: {deterministic_suggestion}")
     print(f"  State snapshot: {snapshot}")
 
     return {
         "next_task": next_task,
-        "reason": choice.reason if next_task == choice.next_task else f"LLM proposed {choice.next_task}; coerced to {next_task}.",
+        "reason": choice.reason
+        if next_task == choice.next_task
+        else f"LLM proposed {choice.next_task}; coerced to {next_task}.",
         "steps": steps,
         "done": next_task == "end",
     }
@@ -168,14 +172,14 @@ def agent_router(state: AgentState) -> str:
 def preference_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running preference_agent...")
     result = preference_agent.app.invoke(state)
-    print(f"[AGENT] preference_agent completed.")
+    print("[AGENT] preference_agent completed.")
     return result
 
 
 def destination_research_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running destination_research_agent...")
     result = destination_research_agent.app.invoke(state)
-    print(f"[AGENT] destination_research_agent completed.")
+    print("[AGENT] destination_research_agent completed.")
     return result
 
 
@@ -200,10 +204,7 @@ graph.add_edge("destination_research_agent", "supervisor_agent")
 
 checkpointer = MemorySaver()
 app = graph.compile(checkpointer=checkpointer)
-config = {
-    "configurable": {"thread_id": "1"},
-    "recursion_limit": 50
-}
+config = {"configurable": {"thread_id": "1"}, "recursion_limit": 50}
 
 
 def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
@@ -226,7 +227,7 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
         "done": False,
         "next_task": "",
         "reason": "",
-        "goal": ""
+        "goal": "",
     }
     base.update(initial_state or {})
 
@@ -235,7 +236,7 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
         base["trip_id"] = base["trip_id"]
 
     print(f"\n{'=' * 60}")
-    print(f"Starting orchestrator")
+    print("Starting orchestrator")
     print(f"Trip ID: {base.get('trip_id', 'N/A')}")
     print(f"User ID: {base.get('user_id', 'N/A')}")
     print(f"Goal: {base.get('goal', 'N/A')}")
@@ -250,4 +251,3 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     print(f"{'=' * 60}\n")
 
     return result
-

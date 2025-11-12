@@ -1,15 +1,13 @@
-import sys
-import os
 import json
+import sys
 from pathlib import Path
-from typing import Dict, Any
-import pytest
+from typing import Any
 
 # Allow importing from backend/app
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.agents.destination_research_agent import DestinationResearchAgent
 from app.agents.agent_state import AgentState
+from app.agents.destination_research_agent import DestinationResearchAgent
 
 
 def print_section(title: str) -> None:
@@ -18,8 +16,7 @@ def print_section(title: str) -> None:
     print("=" * 80)
 
 
-def _run_demo() -> Dict[str, Any]:
-
+def _run_demo() -> dict[str, Any]:
     agent = DestinationResearchAgent()
 
     trip_id = "g1"
@@ -44,7 +41,7 @@ def _run_demo() -> Dict[str, Any]:
     }
 
     # Optional hints that could be provided by UI/orchestrator
-    hints: Dict[str, Any] = {
+    hints: dict[str, Any] = {
         "radius_km": 10,
         "max_items": 10,
         "preferred_categories": ["Food", "Culture"],
@@ -54,11 +51,11 @@ def _run_demo() -> Dict[str, Any]:
     input_state: AgentState = {
         "messages": [],
         "trip_id": trip_id,
-		"agent_data": {
-			"preferences_summary": preferences_summary,
-			"destination": destination,
-			"hints": hints,
-		},
+        "agent_data": {
+            "preferences_summary": preferences_summary,
+            "destination": destination,
+            "hints": hints,
+        },
     }
 
     print_section("INPUT TO DESTINATION RESEARCH AGENT (from PreferenceAgent)")
@@ -76,6 +73,7 @@ def _run_demo() -> Dict[str, Any]:
 
     # Run the agent
     return agent.run(dict(input_state))
+
 
 def test_destination_research_agent_simple():
     """
@@ -96,7 +94,7 @@ def test_destination_research_agent_simple():
     provenance = agent_data_out.get("provenance", []) or []
 
     print_section("OUTPUT FROM DESTINATION RESEARCH AGENT")
-	destination = (output_state.get("agent_data", {}) or {}).get("destination", "Unknown")
+    destination = (output_state.get("agent_data", {}) or {}).get("destination", "Unknown")
     print(f"Destination: {destination}")
     print(f"Activities returned: {len(catalog)}")
 
@@ -128,6 +126,7 @@ def test_destination_research_agent_simple():
     assert "metrics" in agent_data_out
     assert isinstance(catalog, list)
 
+
 if __name__ == "__main__":
     print("\n" + "🧭" * 40)
     print(" " * 16 + "DESTINATION RESEARCH AGENT TEST")
@@ -138,7 +137,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
-
-

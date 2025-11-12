@@ -1,17 +1,18 @@
 # preference_agent.py - Simplified agent for aggregation and semantic search
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Tuple
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import AIMessage
-from langgraph.graph import StateGraph, END
+
+import hashlib
 import math
 import time
-import hashlib
-import numpy as np
+from dataclasses import dataclass, field
+from typing import Any
+
+from langchain_core.messages import AIMessage
+from langgraph.graph import END, StateGraph
 
 from app.agents.agent_state import AgentState
 from app.agents.tools import get_all_trip_preferences
+from app.models.preference import Preference
 
 AGENT_LABEL = "preference"
 
@@ -27,8 +28,9 @@ def get_embedding_model():
     if _embedding_model is None:
         try:
             from sentence_transformers import SentenceTransformer
+
             # Using a lightweight, fast model optimized for semantic similarity
-            _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
             print("[preference] Loaded sentence-transformers model: all-MiniLM-L6-v2")
         except Exception as e:
             print(f"[preference] Warning: Could not load sentence-transformers: {e}")
@@ -36,7 +38,7 @@ def get_embedding_model():
     return _embedding_model
 
 
-def embed_text(text: str) -> List[float]:
+def embed_text(text: str) -> list[float]:
     """
     Create semantic embedding vector using sentence-transformers.
     Falls back to simple hash-based embedding if model not available.
@@ -54,16 +56,17 @@ def embed_text(text: str) -> List[float]:
     return _hash_embed_fallback(text, dim=384)
 
 
-def _hash_embed_fallback(text: str, dim: int = 384) -> List[float]:
+def _hash_embed_fallback(text: str, dim: int = 384) -> list[float]:
     """Fallback hash-based embedding if sentence-transformers unavailable."""
     import hashlib
+
     v = [0.0] * dim
     for char in "/,;:.-()[]{}!?":
         text = text.replace(char, " ")
     tokens = [t for t in text.lower().split() if t]
 
     for tok in tokens:
-        h = int(hashlib.md5(tok.encode('utf-8')).hexdigest(), 16)
+        h = int(hashlib.md5(tok.encode("utf-8")).hexdigest(), 16)
         i = h % dim
         v[i] += 1.0
     # L2 normalize
@@ -71,30 +74,37 @@ def _hash_embed_fallback(text: str, dim: int = 384) -> List[float]:
     return [x / norm for x in v]
 
 
-def cosine(a: List[float], b: List[float]) -> float:
+def cosine(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
-    return sum(x * y for x, y in zip(a, b))
+    return sum(x * y for x, y in zip(a, b, strict=False))
 
 
 # ========== Data Models ==========
 
+
 @dataclass
 class SurveyInput:
     """Input model for user preference survey."""
-    text: Optional[str] = None  # free-form: vibes, notes, activities
-    hard: Dict[str, str] = field(default_factory=dict)  # e.g., {"budget_level":"3","deal_breakers":"No early mornings"}
-    soft: Dict[str, float] = field(default_factory=dict)  # weighted tags 0..1, e.g., {"adventure":0.9,"food":0.8,"nature":0.7}
+
+    text: str | None = None  # free-form: vibes, notes, activities
+    hard: dict[str, str] = field(
+        default_factory=dict
+    )  # e.g., {"budget_level":"3","deal_breakers":"No early mornings"}
+    soft: dict[str, float] = field(
+        default_factory=dict
+    )  # weighted tags 0..1, e.g., {"adventure":0.9,"food":0.8,"nature":0.7}
 
 
 @dataclass
 class UserPreferenceProfile:
     """Complete user preference profile with embedding."""
+
     trip_id: str
     user_id: str
-    hard: Dict[str, str]
-    soft: Dict[str, float]
+    hard: dict[str, str]
+    soft: dict[str, float]
     summary: str
-    vector: List[float]
+    vector: list[float]
     version: int = 1
     source: str = "db"
     updated_at: float = field(default_factory=lambda: time.time())
@@ -103,11 +113,12 @@ class UserPreferenceProfile:
 @dataclass
 class TripPreferenceAggregate:
     """Aggregated preferences for entire trip."""
+
     trip_id: str
-    members: List[str]
-    hard_union: Dict[str, List[str]]
-    soft_mean: Dict[str, float]
-    conflicts: List[Tuple[str, str]]
+    members: list[str]
+    hard_union: dict[str, list[str]]
+    soft_mean: dict[str, float]
+    conflicts: list[tuple[str, str]]
     coverage: float  # 0..1
     ready_for_options: bool
 
@@ -115,14 +126,16 @@ class TripPreferenceAggregate:
 @dataclass
 class ItemCandidate:
     """Candidate item for recommendation."""
+
     id: str
     text: str
-    meta: Dict[str, str] = field(default_factory=dict)
+    meta: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
 class ScoredItem:
     """Item with similarity score."""
+
     id: str
     score: float
     reason: str
@@ -131,28 +144,31 @@ class ScoredItem:
 @dataclass
 class UpdateDelta:
     """Represents changes made during an update."""
-    changed: Dict[str, Tuple[str, str]]  # field -> (old_value, new_value)
+
+    changed: dict[str, tuple[str, str]]  # field -> (old_value, new_value)
 
 
 # ========== Vector Index ==========
+
 
 class VectorIndex:
     """In-memory vector index for semantic search."""
 
     def __init__(self, dim: int = 384):
         self.dim = dim
-        self.vectors: Dict[str, List[float]] = {}
+        self.vectors: dict[str, list[float]] = {}
 
-    def upsert(self, key: str, vec: List[float]) -> None:
+    def upsert(self, key: str, vec: list[float]) -> None:
         if len(vec) != self.dim:
             raise ValueError("vector dim mismatch")
         self.vectors[key] = vec
 
-    def get(self, key: str) -> Optional[List[float]]:
+    def get(self, key: str) -> list[float] | None:
         return self.vectors.get(key)
 
 
 # ========== Preference Agent ==========
+
 
 class PreferenceAgent:
     """
@@ -169,7 +185,7 @@ class PreferenceAgent:
     - Validating input (handled by Pydantic models)
     """
 
-    def __init__(self, model_name: Optional[str] = None, dim: Optional[int] = None):
+    def __init__(self, model_name: str | None = None, dim: int | None = None):
         self.model_name = model_name or "gemini-pro"
 
         # Determine embedding dimension
@@ -187,8 +203,8 @@ class PreferenceAgent:
 
         # In-memory storage
         self.index = VectorIndex(self.dim)
-        self.profiles: Dict[Tuple[str, str], UserPreferenceProfile] = {}
-        self.trips: Dict[str, List[str]] = {}
+        self.profiles: dict[tuple[str, str], UserPreferenceProfile] = {}
+        self.trips: dict[str, list[str]] = {}
 
         # LLM (optional, lazy-loaded)
         self._llm = None
@@ -199,6 +215,7 @@ class PreferenceAgent:
         if self._llm is None:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
+
                 self._llm = ChatGoogleGenerativeAI(model=self.model_name)
             except Exception:
                 # LLM not available, use without it
@@ -213,7 +230,7 @@ class PreferenceAgent:
         short = hashlib.md5(raw.encode("utf-8")).hexdigest()[:6]
         return f"vec_{short}"
 
-    def _normalize_hard(self, pref: Preference) -> Dict[str, str]:
+    def _normalize_hard(self, pref: Preference) -> dict[str, str]:
         """Extract hard constraints from Preference model."""
         hard = {}
         if pref.budget_level:
@@ -222,7 +239,7 @@ class PreferenceAgent:
             hard["deal_breaker"] = pref.deal_breaker
         return hard
 
-    def _normalize_soft(self, vibes: List[str]) -> Dict[str, float]:
+    def _normalize_soft(self, vibes: list[str]) -> dict[str, float]:
         """Convert vibes list to weighted soft preferences."""
         # Assign decreasing weights: 0.9, 0.8, 0.7, ...
         soft = {}
@@ -231,10 +248,10 @@ class PreferenceAgent:
             soft[vibe.lower()] = weight
         return soft
 
-    def _normalize_deal_breakers(self, text: str) -> List[str]:
+    def _normalize_deal_breakers(self, text: str) -> list[str]:
         """
         Normalize deal breaker text into a list of individual deal breakers.
-        
+
         Splits on commas/semicolons, trims whitespace, strips trailing punctuation.
         """
         if not text:
@@ -267,7 +284,7 @@ class PreferenceAgent:
 
         return " ".join(parts).strip()
 
-    def _detect_conflicts(self, hard_union: Dict[str, List[str]]) -> List[Tuple[str, str]]:
+    def _detect_conflicts(self, hard_union: dict[str, list[str]]) -> list[tuple[str, str]]:
         """Detect conflicts in hard constraints."""
         conflicts = []
 
@@ -293,7 +310,7 @@ class PreferenceAgent:
         if not trip_id:
             return {
                 "messages": [AIMessage(content="[preference] Error: No trip_id provided")],
-                "done": True
+                "done": True,
             }
 
         print(f"[preference._fetch_and_process] Fetching preferences for trip: {trip_id}")
@@ -304,8 +321,10 @@ class PreferenceAgent:
 
             if "_error" in result:
                 return {
-                    "messages": [AIMessage(content=f"[preference] Database error: {result['_error']}")],
-                    "done": True
+                    "messages": [
+                        AIMessage(content=f"[preference] Database error: {result['_error']}")
+                    ],
+                    "done": True,
                 }
 
             preferences_data = result.get("preferences", [])
@@ -331,7 +350,7 @@ class PreferenceAgent:
                         soft=soft,
                         summary=summary,
                         vector=vec,
-                        source="db"
+                        source="db",
                     )
 
                     # Store profile
@@ -350,7 +369,9 @@ class PreferenceAgent:
                     print(f"[preference._fetch_and_process] Error processing preference: {e}")
                     continue
 
-            print(f"[preference._fetch_and_process] Created {profiles_created} profiles with embeddings")
+            print(
+                f"[preference._fetch_and_process] Created {profiles_created} profiles with embeddings"
+            )
 
             # Aggregate preferences
             aggregate = self.aggregate(trip_id)
@@ -359,7 +380,7 @@ class PreferenceAgent:
                 [preference] Processing complete for trip {trip_id}:
                 - Members: {len(aggregate.members)}
                 - Top vibes: {dict(sorted(aggregate.soft_mean.items(), key=lambda x: -x[1])[:5])}
-                - Budget levels: {aggregate.hard_union.get('budget_level', [])}
+                - Budget levels: {aggregate.hard_union.get("budget_level", [])}
                 - Conflicts: {aggregate.conflicts}
                 - Ready for planning: {aggregate.ready_for_options}
                 - Coverage: {aggregate.coverage:.0%}
@@ -373,16 +394,14 @@ class PreferenceAgent:
                 "budget_levels": aggregate.hard_union.get("budget_level", []),
                 "conflicts": [f"{k}: {r}" for k, r in aggregate.conflicts],
                 "ready_for_planning": aggregate.ready_for_options,
-                "coverage": aggregate.coverage
+                "coverage": aggregate.coverage,
             }
 
             return {
                 "trip_id": trip_id,
-                "agent_data": {
-                    "preferences_summary": preferences_summary
-                },
+                "agent_data": {"preferences_summary": preferences_summary},
                 "messages": [AIMessage(content=summary_msg)],
-                "done": True
+                "done": True,
             }
 
         except Exception as e:
@@ -390,7 +409,7 @@ class PreferenceAgent:
             print(f"[preference._fetch_and_process] Error: {error_msg}")
             return {
                 "messages": [AIMessage(content=f"[preference] Error: {error_msg}")],
-                "done": True
+                "done": True,
             }
 
     # ========== Graph Construction ==========
@@ -409,11 +428,11 @@ class PreferenceAgent:
 
     # ========== Public API ==========
 
-    def run(self, initial_state: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, initial_state: dict[str, Any]) -> dict[str, Any]:
         """Run the LangGraph agent with given initial state."""
         return self.app.invoke(initial_state)
 
-    def process_trip(self, trip_id: str) -> Dict[str, Any]:
+    def process_trip(self, trip_id: str) -> dict[str, Any]:
         """
         Process all preferences for a trip.
         Fetches from database, creates embeddings, and aggregates.
@@ -424,11 +443,7 @@ class PreferenceAgent:
         Returns:
             State with aggregated preferences and embeddings ready for search
         """
-        initial_state: AgentState = {
-            "messages": [],
-            "trip_id": trip_id,
-            "user_id": ""
-        }
+        initial_state: AgentState = {"messages": [], "trip_id": trip_id, "user_id": ""}
 
         return self.run(initial_state)
 
@@ -446,9 +461,9 @@ class PreferenceAgent:
         if not members:
             return TripPreferenceAggregate(trip_id, [], {}, {}, [], 0.0, False)
 
-        hard_union: Dict[str, List[str]] = {}
-        soft_accum: Dict[str, float] = {}
-        soft_count: Dict[str, int] = {}
+        hard_union: dict[str, list[str]] = {}
+        soft_accum: dict[str, float] = {}
+        soft_count: dict[str, int] = {}
 
         for uid in members:
             p = self.profiles.get((trip_id, uid))
@@ -468,20 +483,28 @@ class PreferenceAgent:
 
         soft_mean = {k: soft_accum[k] / max(1, soft_count[k]) for k in soft_accum}
         conflicts = self._detect_conflicts(hard_union)
-        coverage = len([uid for uid in members if (trip_id, uid) in self.profiles]) / len(members) if members else 0.0
+        coverage = (
+            len([uid for uid in members if (trip_id, uid) in self.profiles]) / len(members)
+            if members
+            else 0.0
+        )
         ready = coverage >= 0.8 and not conflicts
 
-        return TripPreferenceAggregate(trip_id, members, hard_union, soft_mean, conflicts, coverage, ready)
+        return TripPreferenceAggregate(
+            trip_id, members, hard_union, soft_mean, conflicts, coverage, ready
+        )
 
-    def ingest_survey(self, trip_id: str, user_id: str, survey: SurveyInput) -> UserPreferenceProfile:
+    def ingest_survey(
+        self, trip_id: str, user_id: str, survey: SurveyInput
+    ) -> UserPreferenceProfile:
         """
         Manually ingest a user preference survey (for testing/direct input).
-        
+
         Args:
             trip_id: Trip identifier
             user_id: User identifier
             survey: SurveyInput with text, hard constraints, and soft preferences
-            
+
         Returns:
             UserPreferenceProfile created from the survey
         """
@@ -501,7 +524,7 @@ class PreferenceAgent:
             soft=soft,
             summary=summary,
             vector=vec,
-            source="survey"
+            source="survey",
         )
 
         # Store profile
@@ -516,15 +539,15 @@ class PreferenceAgent:
 
         return profile
 
-    def update(self, trip_id: str, user_id: str, updates: Dict[str, str]) -> UpdateDelta:
+    def update(self, trip_id: str, user_id: str, updates: dict[str, str]) -> UpdateDelta:
         """
         Update specific fields in a user's preference profile.
-        
+
         Args:
             trip_id: Trip identifier
             user_id: User identifier
             updates: Dictionary of field paths to new values (e.g., {"hard.budget_level": "4"})
-            
+
         Returns:
             UpdateDelta showing what changed
         """
@@ -561,7 +584,9 @@ class PreferenceAgent:
 
         return UpdateDelta(changed=changed)
 
-    def query_similar(self, trip_id: str, items: List[ItemCandidate], k: int = 5) -> List[ScoredItem]:
+    def query_similar(
+        self, trip_id: str, items: list[ItemCandidate], k: int = 5
+    ) -> list[ScoredItem]:
         """
         Find items most similar to trip preferences using semantic search.
 
@@ -591,14 +616,14 @@ class PreferenceAgent:
                         label = budget_labels.get(int(val), "")
                         if label:
                             weighted_terms.append(label)
-                    except:
+                    except (ValueError, TypeError, AttributeError):
                         pass
 
         trip_text = " ".join(weighted_terms)
         trip_vec = embed_text(trip_text)
 
         # Score items
-        scored: List[ScoredItem] = []
+        scored: list[ScoredItem] = []
         for it in items:
             vec = embed_text(it.text)
             s = cosine(trip_vec, vec)
@@ -607,7 +632,7 @@ class PreferenceAgent:
         scored.sort(key=lambda x: x.score, reverse=True)
         return scored[:k]
 
-    def get_trip_vector(self, trip_id: str) -> Optional[List[float]]:
+    def get_trip_vector(self, trip_id: str) -> list[float] | None:
         """
         Get the aggregated vector for a trip.
 
@@ -645,5 +670,5 @@ __all__ = [
     "TripPreferenceAggregate",
     "ScoredItem",
     "SurveyInput",
-    "UpdateDelta"
+    "UpdateDelta",
 ]
