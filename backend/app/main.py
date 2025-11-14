@@ -14,12 +14,12 @@ from app.router.system import router as system_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Test database connection
-    print("🚀 Starting up Travel Planer API...")
+    print("🚀 Starting up Travel Planner API...")
     await test_connection()
     await init_indexes()
     yield
     # Shutdown: Close database connection
-    print("🛑 Shutting down Travel Planer API...")
+    print("🛑 Shutting down Travel Planner API...")
     await close_database_connection()
 
 

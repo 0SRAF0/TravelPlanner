@@ -8,7 +8,7 @@ router = APIRouter(tags=["System"])
 @router.get("/", response_model=APIResponse)
 def root():
     return APIResponse(
-        code=0, msg="ok", data={"msg": "Travel Planer API. Visit /signup or /login."}
+        code=0, msg="ok", data={"msg": "Travel Planner API. Visit /signup or /login."}
     )
 
 

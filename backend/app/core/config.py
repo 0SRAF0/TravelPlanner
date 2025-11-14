@@ -120,5 +120,5 @@ LANGCHAIN_TRACING_V2 = os.environ.get("LANGCHAIN_TRACING_V2", "false").lower() =
 LANGCHAIN_PROJECT = os.environ.get("LANGCHAIN_PROJECT", "travel-planer")
 
 # === Application Settings ===
-APP_NAME = "Travel Planer API"
+APP_NAME = "Travel Planner API"
 APP_VERSION = "1.0.0"
