@@ -6,7 +6,6 @@ from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 from pydantic.v1 import BaseModel, Field, validator
 
@@ -170,15 +169,18 @@ class DestinationResearchAgent:
         self._llm_unavailable_reason: str = ""
         if api_key:
             try:
-                self.llm = ChatGoogleGenerativeAI(
-                    model=GOOGLE_AI_MODEL, temperature=0, api_key=api_key
-                )
+                # Import lazily
+                from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
+                self.llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, temperature=0, api_key=api_key)
             except Exception:
                 # If client construction fails, continue without LLM; downstream will use fallback
                 self.llm = None
                 import traceback
 
-                self._llm_unavailable_reason = "Failed to initialize Google LLM client"
+                if "langchain_google_genai" in str(traceback.format_exc()):
+                    self._llm_unavailable_reason = "langchain_google_genai not installed"
+                else:
+                    self._llm_unavailable_reason = "Failed to initialize Google LLM client"
                 try:
                     self._llm_unavailable_reason += f": {traceback.format_exc(limit=1).strip()}"
                 except Exception:
