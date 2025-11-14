@@ -1,0 +1,25 @@
+name: dev_travel-planner-server
+services:
+  svc:
+    container_name: svc
+    image: travel-planner:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PIP_REQUIREMENTS: requirements.txt
+    env_file:
+      - .env.dev
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    volumes:
+      # Live-reload your FastAPI app while developing
+      - ./app:/app/app:cached
+    working_dir: /app
+    command: >
+      uvicorn app.main:app
+      --host ${SERVER_HOST}
+      --port ${SERVER_PORT}
+      --reload
+    restart: unless-stopped
+
