@@ -41,8 +41,8 @@ project {
 
     params {
         param("domain-name", "travelplanner.solutions")
+        param("project-route", "/home/vpcuser/TravelPlaner")
         param("env.web", "")
-        param("server-dir-route", "/home/vpcuser/TravelPlaner")
         param("env.api", """
             ENVIRONMENT=deployment
             
