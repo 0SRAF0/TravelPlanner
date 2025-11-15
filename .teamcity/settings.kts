@@ -40,7 +40,6 @@ project {
     buildType(BuildApi)
 
     params {
-        param("server_username", "")
         param("server-project-route", "/home/vpcuser/TravelPlaner")
         param("env.web", """
             ENVIRONMENT=deployment
@@ -51,6 +50,7 @@ project {
             # Google Map
             VITE_GOOGLE_MAPS_API_KEY=AIzaSyDmyZ_sJw5q1fGztTGUbjcHQcrGPeccOa4
         """.trimIndent())
+        param("server-username", "")
         param("env.api", """
             ENVIRONMENT=deployment
             
