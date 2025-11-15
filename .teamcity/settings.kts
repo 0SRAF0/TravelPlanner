@@ -181,7 +181,7 @@ object BuildWeb : BuildType({
                 cd %project_route%
                 rm -rf frontend
             """.trimIndent()
-            targetUrl = "%api-domain_name%:%project_route%/frontend"
+            targetUrl = "%server-address%:%server-project-route%/frontend"
             authMethod = uploadedKey {
                 username = "vpcuser"
                 key = "travelplaner-ibmc-vpc.prv"
