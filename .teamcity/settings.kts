@@ -40,10 +40,10 @@ project {
     buildType(BuildApi)
 
     params {
-        param("server-project-route", "/home/vpcuser/TravelPlaner")
         param("server-address", "travelplanner.solutions")
-        param("server-username", "vpcuser")
+        param("server-project-route", "/home/vpcuser/TravelPlaner")
         password("env.web", "credentialsJSON:a0f500c5-b36e-49ca-957f-14ab39bd9e69")
+        param("server-username", "vpcuser")
         password("env.api", "credentialsJSON:8920a480-dbd6-41e3-bc10-f54fb7c56fa2")
     }
 
@@ -171,7 +171,7 @@ object BuildWeb : BuildType({
             name = "Create .env.prod"
             id = "Create_env_prod"
             commands = """
-                cd %project_route%/backend
+                cd %server-project-route%/backend
                 cat <<'EOF' > .env.prod
                 %env.web%
                 EOF
