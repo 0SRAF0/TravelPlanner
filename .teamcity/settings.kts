@@ -126,12 +126,12 @@ object BuildApi : BuildType({
             commands = """
                 cd %project_route%/backend
                 cat <<'EOF' > .env.prod
-                %env.prod%
+                %env.api%
                 EOF
             """.trimIndent()
             targetUrl = "%server-address%:%server-project-route%/backend"
             authMethod = uploadedKey {
-                username = "vpcuser"
+                username = "%server-username%"
                 key = "travelplaner-ibmc-vpc.prv"
             }
         }
