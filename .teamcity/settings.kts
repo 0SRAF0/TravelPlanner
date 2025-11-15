@@ -192,7 +192,7 @@ object BuildWeb : BuildType({
             id = "Transfer_to_the_Remote_Server"
             transportProtocol = SSHUpload.TransportProtocol.SCP
             sourcePath = "frontend/"
-            targetUrl = "%api-domain_name%:%project_route%/frontend"
+            targetUrl = "%server-address%:%server-project-route%/frontend"
             authMethod = uploadedKey {
                 username = "vpcuser"
                 key = "travelplaner-ibmc-vpc.prv"
