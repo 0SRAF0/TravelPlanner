@@ -91,33 +91,6 @@ project {
 object BuildApi : BuildType({
     name = "Build-API"
 
-    params {
-        param("env.prod", """
-            ENVIRONMENT=deployment
-            
-            # Sys
-            SERVER_HOST=travelplanner.solutions
-            SERVER_PORT=8060
-            CORS_ORIGINS=http://travelplanner.solutions:3060
-            
-            # Google OAuth
-            GOOGLE_CLIENT_ID=1058642267983-5ejpivgliqclab7afnq57eom20qgem63.apps.googleusercontent.com
-            GOOGLE_CLIENT_SECRET=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
-            GOOGLE_REDIRECT_URI=http://travelplanner.solutions:3060/auth/callback
-            
-            # Google AI
-            GOOGLE_AI_API_KEY=AIzaSyDwixr4ZrCqAm0GDY141mrrHotL60XJfvQ
-            
-            # JWT
-            JWT_SECRET=Frrli_WYdq-FahOQrk9Zei6INVzfnjJObJuoCmSBEgA
-            JWT_ALGORITHM=HS256
-            JWT_EXPIRATION_HOURS=24
-            
-            # MongoDB
-            MONGODB_URI=mongodb+srv://root:mRaGrBX18gI8Osmj@travelplanner.70jvxlw.mongodb.net/?appName=TravelPlanner
-        """.trimIndent())
-    }
-
     vcs {
         root(DslContext.settingsRoot)
     }
