@@ -209,7 +209,7 @@ object BuildWeb : BuildType({
             commands = """
                 cd %project_route%/backend
                 cat <<'EOF' > .env.prod
-                %env.prod%%
+                %env.prod%
                 EOF
             """.trimIndent()
             targetUrl = "%api-domain_name%:%project_route%/frontend"
