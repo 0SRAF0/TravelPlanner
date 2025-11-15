@@ -40,6 +40,7 @@ project {
     buildType(BuildApi)
 
     params {
+        param("server_username", "")
         param("server-project-route", "/home/vpcuser/TravelPlaner")
         param("env.web", """
             ENVIRONMENT=deployment
@@ -75,7 +76,6 @@ project {
             MONGODB_URI=mongodb+srv://root:mRaGrBX18gI8Osmj@travelplanner.70jvxlw.mongodb.net/?appName=TravelPlanner
         """.trimIndent())
         param("server-domain-name", "travelplanner.solutions")
-        param("username", "")
     }
 
     features {
