@@ -194,7 +194,7 @@ object BuildWeb : BuildType({
             sourcePath = "frontend/"
             targetUrl = "%server-address%:%server-project-route%/frontend"
             authMethod = uploadedKey {
-                username = "vpcuser"
+                username = "%server-username%"
                 key = "travelplaner-ibmc-vpc.prv"
             }
         }
