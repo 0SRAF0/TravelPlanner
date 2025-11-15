@@ -96,7 +96,7 @@ object BuildApi : BuildType({
                 cd %project_route%
                 rm -rf backend
             """.trimIndent()
-            targetUrl = "%api-domain_name%domain_name%:%project_route%/backend"
+            targetUrl = "%api-domain_name%:%project_route%/backend"
             authMethod = uploadedKey {
                 username = "vpcuser"
                 key = "travelplaner-ibmc-vpc.prv"
