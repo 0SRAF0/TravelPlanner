@@ -116,7 +116,7 @@ object BuildApi : BuildType({
             sourcePath = "backend/"
             targetUrl = "%server-address%:%server-project-route%/backend"
             authMethod = uploadedKey {
-                username = "vpcuser"
+                username = "%server-username%"
                 key = "travelplaner-ibmc-vpc.prv"
             }
         }
