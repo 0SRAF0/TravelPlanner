@@ -40,8 +40,8 @@ project {
     buildType(BuildApi)
 
     params {
-        param("api-domain_name", "travelplanner.solutions")
         param("project_route", "/home/vpcuser/TravelPlaner")
+        param("server-domain-name", "travelplanner.solutions")
     }
 
     features {
