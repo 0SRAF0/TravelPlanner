@@ -142,7 +142,7 @@ object BuildApi : BuildType({
                 cd %project_route%/backend
                 sudo docker compose --env-file .env.prod -f docker-compose-prod.yml up --build -d
             """.trimIndent()
-            targetUrl = "%api-domain_name%:%project_route%/backend"
+            targetUrl = "%server-address%:%server-project-route%/backend"
             authMethod = uploadedKey {
                 username = "vpcuser"
                 key = "travelplaner-ibmc-vpc.prv"
