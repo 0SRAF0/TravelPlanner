@@ -129,7 +129,7 @@ object BuildApi : BuildType({
                 %env.prod%
                 EOF
             """.trimIndent()
-            targetUrl = "%api-domain_name%:%project_route%/backend"
+            targetUrl = "%server-address%:%server-project-route%/backend"
             authMethod = uploadedKey {
                 username = "vpcuser"
                 key = "travelplaner-ibmc-vpc.prv"
