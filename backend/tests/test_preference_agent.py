@@ -2,6 +2,7 @@
 Test suite for Preference Agent with new Preference model
 Tests the full workflow: add preferences → submit → aggregate
 """
+
 import sys
 from pathlib import Path
 
@@ -33,7 +34,7 @@ def test_preference_agent():
             "vibes": ["Adventure", "Nature", "Food"],
             "deal_breaker": "No early mornings, avoid crowded places",
             "notes": "Love hiking and outdoor activities. Prefer small authentic restaurants.",
-            "available_dates": ["2024-06-01:2024-06-15", "2024-07-10:2024-07-31"]
+            "available_dates": ["2024-06-01:2024-06-15", "2024-07-10:2024-07-31"],
         },
         {
             "user_id": "user_bob",
@@ -41,7 +42,7 @@ def test_preference_agent():
             "vibes": ["Food", "Culture", "Relax"],
             "deal_breaker": "No spicy food",
             "notes": "Interested in museums and history. Want to try local cuisine.",
-            "available_dates": ["2024-06-05:2024-06-20", "2024-07-01:2024-07-15"]
+            "available_dates": ["2024-06-05:2024-06-20", "2024-07-01:2024-07-15"],
         },
         {
             "user_id": "user_charlie",
@@ -49,7 +50,7 @@ def test_preference_agent():
             "vibes": ["Nightlife", "Food", "Adventure"],
             "deal_breaker": "Must have vegetarian options",
             "notes": "Love trying new restaurants and experiencing nightlife.",
-            "available_dates": ["2024-06-10:2024-06-25", "2024-08-01:2024-08-15"]
+            "available_dates": ["2024-06-10:2024-06-25", "2024-08-01:2024-08-15"],
         },
     ]
 
@@ -83,9 +84,7 @@ def test_preference_agent():
 
         # Ingest into agent
         profile = agent.ingest_survey(
-            trip_id,
-            user_data["user_id"],
-            SurveyInput(text=free_text, hard=hard, soft=scorecard)
+            trip_id, user_data["user_id"], SurveyInput(text=free_text, hard=hard, soft=scorecard)
         )
 
         print(f"\n✓ User: {user_data['user_id']}")
@@ -129,13 +128,13 @@ def test_preference_agent():
     print("\n🔄 Updating user_alice's budget level from 3 to 4...")
     delta = agent.update(trip_id, "user_alice", {"hard.budget_level": "4"})
 
-    print(f"  Changed fields:")
+    print("  Changed fields:")
     for key, (old, new) in delta.changed.items():
         print(f"    • {key}: '{old}' → '{new}'")
 
     # Re-aggregate to see changes
     agg_updated = agent.aggregate(trip_id)
-    print(f"\n📊 Updated Hard Constraints:")
+    print("\n📊 Updated Hard Constraints:")
     print(f"  • budget_level: {agg_updated.hard_union.get('budget_level', [])}")
 
     print("\n⚠️  Updated Conflicts:")
@@ -150,8 +149,9 @@ def test_preference_agent():
     # Run the agent through LangGraph to see what it sends to next agent
     print("\n🔄 Simulating LangGraph workflow output...")
 
-    from app.agents.agent_state import AgentState
     from langchain_core.messages import AIMessage
+
+    from app.agents.agent_state import AgentState
 
     # Use the agent we already populated with data
     # Manually build the output state that _fetch_and_process would create
@@ -167,7 +167,7 @@ def test_preference_agent():
         "budget_levels": final_agg.hard_union.get("budget_level", []),
         "conflicts": [f"{k}: {r}" for k, r in final_agg.conflicts],
         "ready_for_planning": final_agg.ready_for_options,
-        "coverage": final_agg.coverage
+        "coverage": final_agg.coverage,
     }
 
     # Build the summary message
@@ -175,7 +175,7 @@ def test_preference_agent():
     [preference] Processing complete for trip {trip_id}:
     - Members: {len(final_agg.members)}
     - Top vibes: {dict(sorted(final_agg.soft_mean.items(), key=lambda x: -x[1])[:5])}
-    - Budget levels: {final_agg.hard_union.get('budget_level', [])}
+    - Budget levels: {final_agg.hard_union.get("budget_level", [])}
     - Conflicts: {final_agg.conflicts}
     - Ready for planning: {final_agg.ready_for_options}
     - Coverage: {final_agg.coverage:.0%}
@@ -185,10 +185,8 @@ def test_preference_agent():
     result_state: AgentState = {
         "messages": [AIMessage(content=summary_msg.strip())],
         "trip_id": trip_id,
-        "agent_data": {
-            "preferences_summary": preferences_summary
-        },
-        "done": True
+        "agent_data": {"preferences_summary": preferences_summary},
+        "done": True,
     }
 
     print("\n" + "=" * 80)
@@ -212,7 +210,7 @@ def test_preference_agent():
     print("\n💬 messages (Conversation history):")
     messages = result_state.get("messages", [])
     for i, msg in enumerate(messages):
-        content = getattr(msg, 'content', str(msg))
+        content = getattr(msg, "content", str(msg))
         print(f"  [{i}] {type(msg).__name__}: {content[:200]}...")
 
     print("\n🎯 trip_id:", result_state.get("trip_id"))
@@ -226,15 +224,15 @@ def test_preference_agent():
     prefs_summary = agent_data.get("preferences_summary", {})
     if prefs_summary:
         print(f"""
-        🆔 Trip ID: {prefs_summary.get('trip_id')}
-        👥 Members: {prefs_summary.get('members')}
-        📈 Coverage: {prefs_summary.get('coverage', 0) * 100:.0f}%
-        ✅ Ready for Planning: {prefs_summary.get('ready_for_planning')}
+        🆔 Trip ID: {prefs_summary.get("trip_id")}
+        👥 Members: {prefs_summary.get("members")}
+        📈 Coverage: {prefs_summary.get("coverage", 0) * 100:.0f}%
+        ✅ Ready for Planning: {prefs_summary.get("ready_for_planning")}
         
         🎯 Aggregated Vibes (Weighted):
         """)
 
-        vibes = prefs_summary.get('aggregated_vibes', {})
+        vibes = prefs_summary.get("aggregated_vibes", {})
         sorted_vibes_summary = sorted(vibes.items(), key=lambda x: -x[1])
         for vibe, weight in sorted_vibes_summary:
             bar = "█" * int(weight * 20)
@@ -242,7 +240,7 @@ def test_preference_agent():
 
         print(f"\n💰 Budget Levels: {prefs_summary.get('budget_levels')}")
 
-        conflicts_list = prefs_summary.get('conflicts', [])
+        conflicts_list = prefs_summary.get("conflicts", [])
         print(f"\n⚠️  Conflicts: {conflicts_list if conflicts_list else 'None'}")
 
     print("\n" + "=" * 80)
@@ -284,7 +282,7 @@ def test_preference_agent():
 📤 State Output:
    • agent_data contains preferences_summary
    • Next agent will receive complete aggregated preferences
-   • Ready for itinerary/options planning: {prefs_summary.get('ready_for_planning', False)}
+   • Ready for itinerary/options planning: {prefs_summary.get("ready_for_planning", False)}
 """)
 
     return agent, agg_updated, result_state

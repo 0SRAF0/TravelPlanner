@@ -26,7 +26,7 @@ export const API = {
   // Activities endpoints
   activities: {
     list: `${BASE_URL}/activities`,
-    vote: `${BASE_URL}/activities/vote`, // optional backend endpoint; frontend will handle errors gracefully
+    vote: `${BASE_URL}/activities/vote`,
   },
 
 } as const;

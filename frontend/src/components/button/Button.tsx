@@ -9,7 +9,7 @@ interface ButtonProps {
 
 export default function Button({
     text,
-    color = '#63E6BE',
+    color = 'var(--color-primary)',
     onClick,
     rounded,
     size = 'base',

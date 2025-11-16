@@ -1,5 +1,6 @@
 # agent_state.py - Generic multi-agent state (reusable across projects)
-from typing import TypedDict, Annotated, Dict, Any
+from typing import Annotated, Any, TypedDict
+
 from langgraph.graph.message import add_messages
 
 
@@ -35,6 +36,7 @@ class AgentState(TypedDict, total=False):
       agent_data (e.g., agent_data["destination"], agent_data["hints"]) or
       be passed via the calling context, not as top-level fields here.
     """
+
     # ========== Core Communication Fields ==========
     messages: Annotated[list, add_messages]
 
@@ -50,5 +52,5 @@ class AgentState(TypedDict, total=False):
     goal: str  # High-level objective
 
     # ========== Generic Storage (ALL agents use these) ==========
-    agent_data: Dict[str, Any]  # All agent outputs
-    agent_scratch: Dict[str, Any]  # All agent working memory
+    agent_data: dict[str, Any]  # All agent outputs
+    agent_scratch: dict[str, Any]  # All agent working memory

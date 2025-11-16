@@ -1,9 +1,11 @@
 """
 MongoDB Database Configuration and Connection
 """
+
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.server_api import ServerApi
-from app.core.config import MONGODB_URI, DATABASE_NAME
+
+from app.core.config import DATABASE_NAME, MONGODB_URI
 
 # Global database client
 _client = None
@@ -22,10 +24,7 @@ def get_database():
             raise ValueError("MONGODB_URI environment variable is not set")
 
         # Create MongoDB client with server API version
-        _client = AsyncIOMotorClient(
-            MONGODB_URI,
-            server_api=ServerApi('1')
-        )
+        _client = AsyncIOMotorClient(MONGODB_URI, server_api=ServerApi("1"))
         _database = _client[DATABASE_NAME]
 
         print(f"✅ Connected to MongoDB database: {DATABASE_NAME}")
@@ -51,9 +50,7 @@ async def init_indexes():
         # Preferences indexes
         # Unique preference per (trip_id, user_id)
         await preferences_collection.create_index(
-            [("trip_id", 1), ("user_id", 1)],
-            unique=True,
-            name="uniq_trip_user"
+            [("trip_id", 1), ("user_id", 1)], unique=True, name="uniq_trip_user"
         )
         # Helpful single-field indexes
         await preferences_collection.create_index("user_id")
@@ -89,7 +86,7 @@ async def test_connection():
     try:
         db = get_database()
         # Ping the database
-        await db.command('ping')
+        await db.command("ping")
         print("✅ MongoDB connection successful!")
         return True
     except Exception as e:

@@ -1,4 +1,4 @@
-# Travel Planer — AI copilot for group trips
+# Travel Planner — AI copilot for group trips
 
 ## ⭐ Core Mission
 

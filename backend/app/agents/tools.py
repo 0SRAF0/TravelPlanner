@@ -1,14 +1,12 @@
-import boto3
-import os
-from botocore.exceptions import ClientError
+from typing import Any
+
 from langchain_core.tools import tool
-from typing import Dict, Any, Optional
+
 from app.db.database import get_preferences_collection
-from app.models.preference import Preference
 
 
 @tool
-async def get_all_trip_preferences(trip_id: str) -> Dict[str, Any]:
+async def get_all_trip_preferences(trip_id: str) -> dict[str, Any]:
     """
     Fetch all user preferences for a specific trip.
 
@@ -27,12 +25,7 @@ async def get_all_trip_preferences(trip_id: str) -> Dict[str, Any]:
             if "_id" in pref:
                 pref["_id"] = str(pref["_id"])
 
-        return {
-            "trip_id": trip_id,
-            "preferences": preferences,
-            "count": len(preferences)
-        }
+        return {"trip_id": trip_id, "preferences": preferences, "count": len(preferences)}
 
     except Exception as e:
         return {"_error": f"Database error: {str(e)}"}
-

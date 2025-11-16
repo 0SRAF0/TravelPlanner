@@ -1,0 +1,26 @@
+target-version = "py313"
+line-length = 100
+src = ["app", "tests"]
+extend-exclude = ["venv", ".venv", ".mypy_cache", ".ruff_cache", "__pycache__"]
+
+[lint]
+# E: pycodestyle, F: pyflakes, I: import sort, B: bugbear, UP: pyupgrade, C4: comprehensions
+select = ["E", "F", "I", "B", "UP", "C4"]
+ignore = [
+  "E501",  # line length; formatter will handle what it can
+  "B008",  # FastAPI Depends() in params is a common pattern
+  "B904",  # 'raise from' chaining; okay to relax for now
+]
+fixable = ["ALL"]
+
+[lint.isort]
+known-first-party = ["app"]
+combine-as-imports = true
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+skip-magic-trailing-comma = false
+
+

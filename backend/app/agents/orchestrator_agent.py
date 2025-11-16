@@ -22,15 +22,15 @@ WORKERS: Dict[str, Dict[str, str]] = {
     # key -> graph node name + description
     "preference_processor": {
         "node": "preference_agent",
-        "desc": "Process and save user travel preferences (budget, vibes, deal breakers)"
+        "desc": "Process and save user travel preferences (budget, vibes, deal breakers)",
     },
     "destination_researcher": {
         "node": "destination_research_agent",
-        "desc": "Research destination and generate activity catalog aligned to group preferences"
+        "desc": "Research destination and generate activity catalog aligned to group preferences",
     },
     "itinerary_planner": {
         "node": "itinerary_agent",
-        "desc": "Generate trip itinerary based on preferences and activity catalog"
+        "desc": "Generate trip itinerary based on preferences and activity catalog",
     },
     # Future agents:
     # "accommodation_finder": {"node": "accommodation_agent", "desc": "Find suitable accommodations"},
@@ -88,7 +88,9 @@ def _needs_itinerary_generation(state: AgentState) -> bool:
     agent_data = state.get("agent_data", {}) or {}
     has_catalog = agent_data.get("activity_catalog") is not None
     has_itinerary = agent_data.get("itinerary") is not None
-    trip_duration_days = agent_data.get("trip_duration_days") or state.get("trip_duration_days")
+    trip_duration_days = agent_data.get("trip_duration_days") or state.get(
+        "trip_duration_days"
+    )
     return has_catalog and bool(trip_duration_days) and not has_itinerary
 
 
@@ -136,7 +138,9 @@ def supervisor_agent(state: AgentState) -> AgentState:
     }
 
     history_text = "\n".join(
-        getattr(m, "content", "") for m in state.get("messages", []) if hasattr(m, "content")
+        getattr(m, "content", "")
+        for m in state.get("messages", [])
+        if hasattr(m, "content")
     )
 
     user_prompt = f"""State snapshot:
@@ -147,8 +151,13 @@ History:
 """
 
     choice = llm.with_structured_output(SupervisorChoice).invoke(
-        [{"role": "system", "content": SUPERVISOR_SYS.format(registry_block=registry_block)},
-         {"role": "user", "content": user_prompt}]
+        [
+            {
+                "role": "system",
+                "content": SUPERVISOR_SYS.format(registry_block=registry_block),
+            },
+            {"role": "user", "content": user_prompt},
+        ]
     )
 
     next_task = choice.next_task.strip()
@@ -160,14 +169,18 @@ History:
     # Log supervisor decision
     print(f"\n[SUPERVISOR - Step {steps}]")
     print(f"  Next task: {next_task}")
-    print(f"  Reason: {choice.reason if next_task == choice.next_task else f'LLM proposed {choice.next_task}; coerced to {next_task}.'}")
+    print(
+        f"  Reason: {choice.reason if next_task == choice.next_task else f'LLM proposed {choice.next_task}; coerced to {next_task}.'}"
+    )
     if deterministic_suggestion:
         print(f"  Deterministic suggestion: {deterministic_suggestion}")
     print(f"  State snapshot: {snapshot}")
 
     return {
         "next_task": next_task,
-        "reason": choice.reason if next_task == choice.next_task else f"LLM proposed {choice.next_task}; coerced to {next_task}.",
+        "reason": choice.reason
+        if next_task == choice.next_task
+        else f"LLM proposed {choice.next_task}; coerced to {next_task}.",
         "steps": steps,
         "done": next_task == "end",
     }
@@ -228,10 +241,7 @@ graph.add_edge("itinerary_agent", "supervisor_agent")
 
 checkpointer = MemorySaver()
 app = graph.compile(checkpointer=checkpointer)
-config = {
-    "configurable": {"thread_id": "1"},
-    "recursion_limit": 50
-}
+config = {"configurable": {"thread_id": "1"}, "recursion_limit": 50}
 
 
 def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
@@ -254,7 +264,7 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
         "done": False,
         "next_task": "",
         "reason": "",
-        "goal": ""
+        "goal": "",
     }
     base.update(initial_state or {})
 
@@ -278,4 +288,3 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     print(f"{'=' * 60}\n")
 
     return result
-
