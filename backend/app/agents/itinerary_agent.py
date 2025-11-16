@@ -1,19 +1,18 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Literal
-from pydantic.v1 import BaseModel, Field, validator
-from langgraph.graph import StateGraph, END
+
+import json
+import time
+from typing import Any
+
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-import os
-import time
-import json
+from langgraph.graph import END, StateGraph
+from pydantic.v1 import BaseModel, Field, validator
 
 from app.agents.agent_state import AgentState
 from app.agents.destination_research_agent import Activity, PreferencesSummaryIn
-from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
-
+from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL
 
 AGENT_LABEL = "itinerary_generation"
 
@@ -25,29 +24,29 @@ class ItineraryItem(BaseModel):
     name: str
     start_time: str = Field(description="Start time in HH:MM format (24-hour)")
     end_time: str = Field(description="End time in HH:MM format (24-hour)")
-    notes: Optional[str] = Field(default=None, description="Short notes or tips for this activity")
-    lat: Optional[float] = None
-    lng: Optional[float] = None
-    category: Optional[str] = None
-    rough_cost: Optional[int] = None
-    duration_min: Optional[int] = None
+    notes: str | None = Field(default=None, description="Short notes or tips for this activity")
+    lat: float | None = None
+    lng: float | None = None
+    category: str | None = None
+    rough_cost: int | None = None
+    duration_min: int | None = None
 
 
 class DayItinerary(BaseModel):
     day: int = Field(description="Day number, starting from 1")
-    date: Optional[str] = Field(default=None, description="Optional date for the day (YYYY-MM-DD)")
-    items: List[ItineraryItem] = Field(default_factory=list)
+    date: str | None = Field(default=None, description="Optional date for the day (YYYY-MM-DD)")
+    items: list[ItineraryItem] = Field(default_factory=list)
 
 
 class ItineraryOut(BaseModel):
-    itinerary: List[DayItinerary] = Field(default_factory=list)
-    insights: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    metrics: Dict[str, Any] = Field(default_factory=dict)
-    provenance: List[str] = Field(default_factory=list)
+    itinerary: list[DayItinerary] = Field(default_factory=list)
+    insights: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[str] = Field(default_factory=list)
 
     @validator("metrics", pre=True, always=True)
-    def _ensure_metrics_is_dict(cls, value: Any) -> Dict[str, Any]:
+    def _ensure_metrics_is_dict(cls, value: Any) -> dict[str, Any]:
         if value is None or value == "":
             return {}
         if isinstance(value, dict):
@@ -66,10 +65,10 @@ class ItineraryOut(BaseModel):
 class ItineraryGenerationInput(BaseModel):
     preferences_summary: PreferencesSummaryIn
     destination: str
-    activity_catalog: List[Activity]
+    activity_catalog: list[Activity]
     trip_duration_days: int = Field(default=3, description="Number of days for the trip")
-    start_date: Optional[str] = Field(default=None, description="Optional start date for the trip (YYYY-MM-DD)")
-    hints: Optional[Dict[str, Any]] = None
+    start_date: str | None = Field(default=None, description="Optional start date for the trip (YYYY-MM-DD)")
+    hints: dict[str, Any] | None = None
 
 
 # ====== Prompt ======
@@ -106,7 +105,7 @@ Rules:
 
 class ItineraryAgent:
     def __init__(self) -> None:
-        self._cache: Dict[str, ItineraryOut] = {}
+        self._cache: dict[str, ItineraryOut] = {}
         api_key = GOOGLE_AI_API_KEY
         self.llm = None
         self._llm_unavailable_reason: str = ""
@@ -143,8 +142,8 @@ class ItineraryAgent:
         trip_duration_days = state.get("trip_duration_days") or agent_data.get("trip_duration_days", 3)
         start_date = state.get("start_date") or agent_data.get("start_date")
 
-        insights: List[str] = []
-        warnings: List[str] = []
+        insights: list[str] = []
+        warnings: list[str] = []
 
         if not pref_summary:
             warnings.append("Missing preferences summary")
@@ -287,7 +286,7 @@ class ItineraryAgent:
         return g.compile()
 
     # ---- Public API ----
-    def run(self, initial_state: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, initial_state: dict[str, Any]) -> dict[str, Any]:
         return self.app.invoke(initial_state)
 
 

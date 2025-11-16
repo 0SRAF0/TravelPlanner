@@ -4,6 +4,7 @@ Provides endpoints for managing and retrieving activities
 """
 
 from fastapi import APIRouter, HTTPException, Query
+
 from app.db.database import get_activities_collection
 from app.models.activity import Activity
 from app.models.common import APIResponse

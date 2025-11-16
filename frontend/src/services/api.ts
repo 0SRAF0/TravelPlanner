@@ -29,4 +29,9 @@ export const API = {
     vote: `${BASE_URL}/activities/vote`,
   },
 
+  // Chat endpoints
+  chat: {
+    send: `${BASE_URL}/chat`,
+  },
+
 } as const;
