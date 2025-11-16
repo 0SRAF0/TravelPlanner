@@ -20,6 +20,7 @@ AGENT_LABEL = "itinerary_generation"
 
 # ====== Models ======
 
+
 class ItineraryItem(BaseModel):
     activity_id: str
     name: str
@@ -68,7 +69,9 @@ class ItineraryGenerationInput(BaseModel):
     destination: str
     activity_catalog: List[Activity]
     trip_duration_days: int = Field(default=3, description="Number of days for the trip")
-    start_date: Optional[str] = Field(default=None, description="Optional start date for the trip (YYYY-MM-DD)")
+    start_date: Optional[str] = Field(
+        default=None, description="Optional start date for the trip (YYYY-MM-DD)"
+    )
     hints: Optional[Dict[str, Any]] = None
 
 
@@ -104,6 +107,7 @@ Rules:
 
 # ====== Agent Implementation ======
 
+
 class ItineraryAgent:
     def __init__(self) -> None:
         self._cache: Dict[str, ItineraryOut] = {}
@@ -112,10 +116,13 @@ class ItineraryAgent:
         self._llm_unavailable_reason: str = ""
         if api_key:
             try:
-                self.llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, temperature=0.7, api_key=api_key)
+                self.llm = ChatGoogleGenerativeAI(
+                    model=GOOGLE_AI_MODEL, temperature=0.7, api_key=api_key
+                )
             except Exception:
                 self.llm = None
                 import traceback
+
                 self._llm_unavailable_reason = "Failed to initialize Google LLM client"
                 try:
                     self._llm_unavailable_reason += f": {traceback.format_exc(limit=1).strip()}"
@@ -140,7 +147,9 @@ class ItineraryAgent:
         pref_summary = state.get("preferences_summary") or agent_data.get("preferences_summary")
         destination = state.get("destination") or agent_data.get("destination")
         activity_catalog = state.get("activity_catalog") or agent_data.get("activity_catalog")
-        trip_duration_days = state.get("trip_duration_days") or agent_data.get("trip_duration_days", 3)
+        trip_duration_days = state.get("trip_duration_days") or agent_data.get(
+            "trip_duration_days", 3
+        )
         start_date = state.get("start_date") or agent_data.get("start_date")
 
         insights: List[str] = []
@@ -154,7 +163,9 @@ class ItineraryAgent:
             insights.append("Provide a destination like 'City, Country'")
         if not activity_catalog:
             warnings.append("Missing activity catalog")
-            insights.append("Ensure destination research is performed by the DestinationResearchAgent")
+            insights.append(
+                "Ensure destination research is performed by the DestinationResearchAgent"
+            )
 
         if warnings:
             out = ItineraryOut(
@@ -171,12 +182,12 @@ class ItineraryAgent:
         # Validate inputs
         try:
             input_data = ItineraryGenerationInput(
-                preferences_summary=PreferencesSummaryIn(**pref_summary), # type: ignore
-                destination=destination, # type: ignore
-                activity_catalog=[Activity(**a) for a in activity_catalog], # type: ignore
-                trip_duration_days=trip_duration_days, # type: ignore
-                start_date=start_date, # type: ignore
-                hints=hints
+                preferences_summary=PreferencesSummaryIn(**pref_summary),  # type: ignore
+                destination=destination,  # type: ignore
+                activity_catalog=[Activity(**a) for a in activity_catalog],  # type: ignore
+                trip_duration_days=trip_duration_days,  # type: ignore
+                start_date=start_date,  # type: ignore
+                hints=hints,
             )
         except Exception as e:
             warnings.append(f"Invalid input data: {e}")
@@ -193,7 +204,7 @@ class ItineraryAgent:
 
         trip_id = input_data.preferences_summary.trip_id or (state.get("trip_id") or "trip")
         cache_key = f"{trip_id}|{input_data.destination}|{input_data.trip_duration_days}|{input_data.start_date}|{json.dumps(input_data.hints, sort_keys=True)}"
-        
+
         if cache_key in self._cache and not force:
             cached = self._cache[cache_key]
             agent_data.update(cached.dict())
@@ -210,10 +221,12 @@ class ItineraryAgent:
             "hints": input_data.hints,
         }
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM),
-            ("user", "Input:\n{payload}\n\nReturn JSON only."),
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", SYSTEM),
+                ("user", "Input:\n{payload}\n\nReturn JSON only."),
+            ]
+        )
 
         if self.llm is None:
             if self._llm_unavailable_reason:
@@ -221,7 +234,12 @@ class ItineraryAgent:
             out = ItineraryOut(
                 itinerary=[],
                 insights=["LLM is not available to generate itinerary."],
-                warnings=["LLM unavailable; no itinerary generated", f"Reason: {self._llm_unavailable_reason}"] if self._llm_unavailable_reason else ["LLM unavailable; no itinerary generated"],
+                warnings=[
+                    "LLM unavailable; no itinerary generated",
+                    f"Reason: {self._llm_unavailable_reason}",
+                ]
+                if self._llm_unavailable_reason
+                else ["LLM unavailable; no itinerary generated"],
                 metrics={"latency_ms": int((time.time() - t0) * 1000)},
                 provenance=["llm_unavailable"],
             )
@@ -239,7 +257,10 @@ class ItineraryAgent:
             out = ItineraryOut(
                 itinerary=[],
                 insights=["LLM failed to generate itinerary. Try adjusting inputs or hints."],
-                warnings=["LLM unavailable or failed; no itinerary generated", f"Error: {err_text}"],
+                warnings=[
+                    "LLM unavailable or failed; no itinerary generated",
+                    f"Error: {err_text}",
+                ],
                 metrics={"latency_ms": int((time.time() - t0) * 1000)},
                 provenance=["llm_failed"],
             )
@@ -248,14 +269,16 @@ class ItineraryAgent:
             return state
 
         metrics = dict(result.metrics or {})
-        metrics.update({
-            "generated_days": len(result.itinerary),
-            "total_activities": sum(len(day.items) for day in result.itinerary),
-            "latency_ms": int((time.time() - t0) * 1000),
-            "trip_id": trip_id,
-            "destination": destination,
-            "trip_duration_days": trip_duration_days,
-        })
+        metrics.update(
+            {
+                "generated_days": len(result.itinerary),
+                "total_activities": sum(len(day.items) for day in result.itinerary),
+                "latency_ms": int((time.time() - t0) * 1000),
+                "trip_id": trip_id,
+                "destination": destination,
+                "trip_duration_days": trip_duration_days,
+            }
+        )
 
         out = ItineraryOut(
             itinerary=result.itinerary or [],
