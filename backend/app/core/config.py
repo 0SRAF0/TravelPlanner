@@ -22,14 +22,18 @@ def _load_env_files() -> None:
     # 2) Explicit file via ENV_FILE
     explicit = os.environ.get("ENV_FILE")
     if explicit:
-        explicit_path = explicit if os.path.isabs(explicit) else find_dotenv(explicit, usecwd=True)
+        explicit_path = (
+            explicit if os.path.isabs(explicit) else find_dotenv(explicit, usecwd=True)
+        )
         if explicit_path:
             load_dotenv(explicit_path, override=False)
             return
 
     # 3) Environment-specific file inferred from ENVIRONMENT/ENV/PYTHON_ENV
     env_name = (
-        os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or os.environ.get("PYTHON_ENV")
+        os.environ.get("ENVIRONMENT")
+        or os.environ.get("ENV")
+        or os.environ.get("PYTHON_ENV")
     )
     if env_name:
         slug = str(env_name).strip().lower()
@@ -50,7 +54,9 @@ def _load_env_files() -> None:
 _load_env_files()
 
 # === Environment Configuration ===
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")  # development, staging, production
+ENVIRONMENT = os.environ.get(
+    "ENVIRONMENT", "development"
+)  # development, staging, production
 
 # === Server Configuration ===
 SERVER_HOST = os.environ.get("SERVER_HOST", "0.0.0.0")
@@ -81,9 +87,7 @@ SERVER_PORT = _get_int_env("SERVER_PORT", 8060)
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 
 # === CORS Configuration ===
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS").split(
-    ","
-)
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS").split(",")
 # Example: "http://localhost:3060,http://127.0.0.1:3060,http://localhost:3000,https://yourdomain.com"
 
 # === Database Configuration ===
@@ -95,7 +99,9 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
 # Google OAuth URLs (rarely change, but configurable if needed)
-GOOGLE_TOKEN_URL = os.environ.get("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token")
+GOOGLE_TOKEN_URL = os.environ.get(
+    "GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token"
+)
 GOOGLE_USERINFO_URL = os.environ.get(
     "GOOGLE_USERINFO_URL", "https://www.googleapis.com/oauth2/v2/userinfo"
 )
