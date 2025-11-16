@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Button from "../button";
 import { authService, type UserInfo } from "../../services/authService.ts";
+import LogoFull from '../../../assets/full-logo.svg';
 
 const maskEmail = (email: string, minLocalLength: number = 12): string => {
   if (!email) return '';
@@ -78,7 +79,7 @@ export default function Header() {
     <header className="flex justify-between items-center px-6 py-6">
       <div className="flex items-center">
         <img
-          src="/assets/full-logo.svg"
+          src={LogoFull}
           alt="Travel Planner"
           className="h-10 w-auto cursor-pointer"
           onClick={handleHomepageClick}

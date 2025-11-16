@@ -1,20 +1,24 @@
 # orchestrator_agent.py - Multi-agent orchestrator for travel planner
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, StateGraph
+from typing import Dict, Literal, Optional
 from pydantic.v1 import BaseModel, Field
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage, AIMessage
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 
-from app.agents.agent_state import AgentState
-from app.agents.destination_research_agent import DestinationResearchAgent
-from app.agents.preference_agent import PreferenceAgent
 from app.core.config import GOOGLE_AI_MODEL
+from app.agents.agent_state import AgentState
+from app.agents.preference_agent import PreferenceAgent
+from app.agents.destination_research_agent import DestinationResearchAgent
+from app.agents.itinerary_agent import ItineraryAgent
 
 # --- Instantiate agents ---
 preference_agent = PreferenceAgent()
 destination_research_agent = DestinationResearchAgent()
+itinerary_agent = ItineraryAgent()
 
 # --- Worker registry: add new agents here later ---
-WORKERS: dict[str, dict[str, str]] = {
+WORKERS: Dict[str, Dict[str, str]] = {
     # key -> graph node name + description
     "preference_processor": {
         "node": "preference_agent",
@@ -24,8 +28,11 @@ WORKERS: dict[str, dict[str, str]] = {
         "node": "destination_research_agent",
         "desc": "Research destination and generate activity catalog aligned to group preferences",
     },
+    "itinerary_planner": {
+        "node": "itinerary_agent",
+        "desc": "Generate trip itinerary based on preferences and activity catalog",
+    },
     # Future agents:
-    # "itinerary_planner": {"node": "itinerary_agent", "desc": "Generate trip itinerary"},
     # "accommodation_finder": {"node": "accommodation_agent", "desc": "Find suitable accommodations"},
 }
 
@@ -51,7 +58,7 @@ Registry (key → capability):
 Routing rules:
 1) If trip_id exists and no preferences_summary → preference_processor (fetch and aggregate)
 2) If preferences_summary exists, destination provided, and no activity_catalog → destination_researcher
-3) If activity_catalog exists and goal involves itinerary → itinerary_planner (future)
+3) If activity_catalog exists, trip_duration_days is set, and no itinerary → itinerary_planner
 4) If all relevant items are done or goal accomplished → end
 
 Return JSON only.
@@ -76,6 +83,17 @@ def _needs_destination_research(state: AgentState) -> bool:
     return has_preferences and has_destination and not has_catalog
 
 
+def _needs_itinerary_generation(state: AgentState) -> bool:
+    """Check if itinerary generation needs to be performed."""
+    agent_data = state.get("agent_data", {}) or {}
+    has_catalog = agent_data.get("activity_catalog") is not None
+    has_itinerary = agent_data.get("itinerary") is not None
+    trip_duration_days = agent_data.get("trip_duration_days") or state.get(
+        "trip_duration_days"
+    )
+    return has_catalog and bool(trip_duration_days) and not has_itinerary
+
+
 def supervisor_agent(state: AgentState) -> AgentState:
     """Supervisor node: decides which agent to run next."""
     # Increment steps counter
@@ -92,12 +110,14 @@ def supervisor_agent(state: AgentState) -> AgentState:
         }
 
     # Fast guardrail (deterministic suggestion)
-    deterministic_suggestion: str | None = None
+    deterministic_suggestion: Optional[str] = None
 
     if _needs_preference_processing(state):
         deterministic_suggestion = "preference_processor"
     elif _needs_destination_research(state):
         deterministic_suggestion = "destination_researcher"
+    elif _needs_itinerary_generation(state):
+        deterministic_suggestion = "itinerary_planner"
 
     # Build LLM prompt with snapshot + registry
     registry_block = "\n".join([f"- {k}: {v['desc']}" for k, v in WORKERS.items()])
@@ -110,13 +130,17 @@ def supervisor_agent(state: AgentState) -> AgentState:
         "destination": agent_data.get("destination", ""),
         "has_preferences_summary": bool(agent_data.get("preferences_summary")),
         "has_activity_catalog": bool(agent_data.get("activity_catalog")),
+        "has_itinerary": bool(agent_data.get("itinerary")),
         "needs_preference_processing": _needs_preference_processing(state),
         "needs_destination_research": _needs_destination_research(state),
+        "needs_itinerary_generation": _needs_itinerary_generation(state),
         "current_step": steps,
     }
 
     history_text = "\n".join(
-        getattr(m, "content", "") for m in state.get("messages", []) if hasattr(m, "content")
+        getattr(m, "content", "")
+        for m in state.get("messages", [])
+        if hasattr(m, "content")
     )
 
     user_prompt = f"""State snapshot:
@@ -128,7 +152,10 @@ History:
 
     choice = llm.with_structured_output(SupervisorChoice).invoke(
         [
-            {"role": "system", "content": SUPERVISOR_SYS.format(registry_block=registry_block)},
+            {
+                "role": "system",
+                "content": SUPERVISOR_SYS.format(registry_block=registry_block),
+            },
             {"role": "user", "content": user_prompt},
         ]
     )
@@ -172,14 +199,21 @@ def agent_router(state: AgentState) -> str:
 def preference_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running preference_agent...")
     result = preference_agent.app.invoke(state)
-    print("[AGENT] preference_agent completed.")
+    print(f"[AGENT] preference_agent completed.")
     return result
 
 
 def destination_research_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running destination_research_agent...")
     result = destination_research_agent.app.invoke(state)
-    print("[AGENT] destination_research_agent completed.")
+    print(f"[AGENT] destination_research_agent completed.")
+    return result
+
+
+def itinerary_agent_wrapper(state: AgentState) -> AgentState:
+    print("\n[AGENT] Running itinerary_agent...")
+    result = itinerary_agent.app.invoke(state)
+    print(f"[AGENT] itinerary_agent completed.")
     return result
 
 
@@ -188,6 +222,7 @@ graph = StateGraph(AgentState)
 graph.add_node("supervisor_agent", supervisor_agent)
 graph.add_node("preference_agent", preference_agent_wrapper)
 graph.add_node("destination_research_agent", destination_research_agent_wrapper)
+graph.add_node("itinerary_agent", itinerary_agent_wrapper)
 
 graph.set_entry_point("supervisor_agent")
 graph.add_conditional_edges(
@@ -196,11 +231,13 @@ graph.add_conditional_edges(
     {
         "preference_agent": "preference_agent",
         "destination_research_agent": "destination_research_agent",
+        "itinerary_planner": "itinerary_agent",
         "end": END,
     },
 )
 graph.add_edge("preference_agent", "supervisor_agent")
 graph.add_edge("destination_research_agent", "supervisor_agent")
+graph.add_edge("itinerary_agent", "supervisor_agent")
 
 checkpointer = MemorySaver()
 app = graph.compile(checkpointer=checkpointer)
@@ -236,7 +273,7 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
         base["trip_id"] = base["trip_id"]
 
     print(f"\n{'=' * 60}")
-    print("Starting orchestrator")
+    print(f"Starting orchestrator")
     print(f"Trip ID: {base.get('trip_id', 'N/A')}")
     print(f"User ID: {base.get('user_id', 'N/A')}")
     print(f"Goal: {base.get('goal', 'N/A')}")

@@ -30,24 +30,26 @@ ENVIRONMENT=prod uvicorn app.main:app --host 0.0.0.0 --port 8060
 Use a proper process manager or container/orchestrator for real deployments.
 
 ### Docker
-#### Using Docker Compose (recommended)
-From the project root (where `docker-compose.yml` is):
+#### Using Docker Compose
+From the backend directory (where `backend/docker-compose.yml` is):
 ```bash
+cd backend
 docker compose up -d --build
 ```
 - API will be at `http://localhost:8060`
-- MongoDB will listen on `localhost:27017` with default user `root`/`example`
-- The API container uses `MONGODB_URI=mongodb://root:example@mongo:27017/travel_planner?authSource=admin`
+- You must provide `MONGODB_URI` via shell env or a `.env` file in `backend/`
 
 Stop and remove containers:
 ```bash
+cd backend
 docker compose down
 ```
 
 #### Build and run the API container only
-From the project root:
+From the backend directory:
 ```bash
-docker build -t travelplanner-api ./backend
+cd backend
+docker build -t travelplanner-api .
 docker run --rm -p 8060:8060 \
   -e ENVIRONMENT=production \
   -e SERVER_PORT=8060 \

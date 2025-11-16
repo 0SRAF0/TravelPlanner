@@ -1,0 +1,15 @@
+name: prod_travel-planner-frontend
+services:
+  web:
+    container_name: web
+    env_file:
+      - .env.prod
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_APP_API_BASE_URL: ${VITE_APP_API_BASE_URL}
+    ports:
+      - "3060:80"
+    restart: unless-stopped
+
