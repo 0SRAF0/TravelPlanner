@@ -1,17 +1,18 @@
-import sys
-import os
 import json
+import sys
 from pathlib import Path
-from typing import Dict, Any
-import pytest
+from typing import Any
 from unittest.mock import MagicMock, patch
+
+import pytest
 from langchain_core.runnables import RunnableLambda
 
 # Allow importing from backend/app
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.agents.itinerary_agent import ItineraryAgent, ItineraryGenerationInput, ItineraryOut, DayItinerary, ItineraryItem
 from app.agents.agent_state import AgentState
+from app.agents.itinerary_agent import DayItinerary, ItineraryAgent, ItineraryItem, ItineraryOut
+
 
 def print_section(title: str) -> None:
     print("\n" + "=" * 80)
@@ -52,7 +53,7 @@ def mock_llm():
     
     return mock
 
-def _run_itinerary_agent_demo(mock_llm_instance: MagicMock) -> Dict[str, Any]:
+def _run_itinerary_agent_demo(mock_llm_instance: MagicMock) -> dict[str, Any]:
     """Helper function to run the ItineraryAgent with a mock LLM."""
     # Patch ChatGoogleGenerativeAI where it's imported in itinerary_agent.py
     # and also patch the API key to ensure the agent initializes correctly.

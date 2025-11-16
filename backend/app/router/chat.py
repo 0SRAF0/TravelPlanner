@@ -42,8 +42,8 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user_id)
         )
 
     try:
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
         from langchain_google_genai import ChatGoogleGenerativeAI
-        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
         llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY)
 
