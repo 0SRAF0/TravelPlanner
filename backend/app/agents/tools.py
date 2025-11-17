@@ -1,5 +1,4 @@
 from typing import Any
-
 from langchain_core.tools import tool
 
 from app.db.database import get_preferences_collection

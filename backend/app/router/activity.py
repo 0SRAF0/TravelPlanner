@@ -52,3 +52,14 @@ async def get_activities(
     except Exception as e:
         print(f"Error fetching activities: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve activities: {str(e)}")
+
+
+@router.post("/vote", response_model=APIResponse)
+async def vote_activity(
+    trip_id: str,
+    activity_name: str,
+    user_id: str,
+    vote: str,  # 'up' or 'down'
+):
+    # TODO: Store votes and potentially re-rank activities
+    pass

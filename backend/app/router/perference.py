@@ -33,6 +33,7 @@ _VIBE_MAP: dict[str, str] = {
 class Preference(BaseModel):
     trip_id: str
     user_id: str
+    destination: str | None = Field(None, description="Preferred destination")
     budget_level: int | None = Field(
         default=None, ge=1, le=4, description="1=Budget, 2=Moderate, 3=Comfort, 4=Luxury"
     )
@@ -43,7 +44,7 @@ class Preference(BaseModel):
     deal_breaker: str | None = None
     notes: str | None = None
     available_dates: list[str] = Field(
-        default_factory=list, description="Available date ranges (ISO format)"
+        default_factory=list, description="Available date ranges in format 'YYYY-MM-DD:YYYY-MM-DD'"
     )
 
 
@@ -114,6 +115,29 @@ async def add_preference(body: Preference):
         )
 
         await col.insert_one(preference_doc.model_dump())
+
+    # Track that this user has submitted preferences for this trip (both create and update)
+    try:
+        db = get_database()
+        trips_collection = db.trips
+
+        # Try ObjectId first, then fallback to string ID
+        try:
+            result = await trips_collection.update_one(
+                {"_id": ObjectId(tid)},
+                {"$addToSet": {"members_with_preferences": uid}},
+            )
+        except Exception:
+            result = await trips_collection.update_one(
+                {"trip_id": tid},
+                {"$addToSet": {"members_with_preferences": uid}},
+            )
+
+        print(
+            f"[add_preference] Updated trip member status: matched={result.matched_count}, modified={result.modified_count}"
+        )
+    except Exception as e:
+        print(f"[add_preference] Warning: could not update trip member status: {e}")
 
     message = f"Preference {'updated' if is_update else 'created'} successfully"
     return APIResponse(

@@ -48,5 +48,3 @@ export const activityService = {
     return response.json();
   },
 };
-
-

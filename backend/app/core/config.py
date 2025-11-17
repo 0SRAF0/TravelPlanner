@@ -109,6 +109,8 @@ GOOGLE_TOKEN_URL = os.environ.get("GOOGLE_TOKEN_URL", "https://oauth2.googleapis
 GOOGLE_USERINFO_URL = os.environ.get(
     "GOOGLE_USERINFO_URL", "https://www.googleapis.com/oauth2/v2/userinfo"
 )
+# Google Maps API (for location autocomplete)
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
 # === JWT Configuration ===
 JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key-change-this-in-production")

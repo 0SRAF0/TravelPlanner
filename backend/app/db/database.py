@@ -40,25 +40,27 @@ async def init_indexes():
         users_collection = get_users_collection()
         preferences_collection = get_preferences_collection()
         activities_collection = get_activities_collection()
+        trips_collection = get_trips_collection()
 
-        # Create unique index on google_id
+        # Users indexes
         await users_collection.create_index("google_id", unique=True)
-
-        # Create index on email for faster lookups
         await users_collection.create_index("email")
 
         # Preferences indexes
-        # Unique preference per (trip_id, user_id)
         await preferences_collection.create_index(
             [("trip_id", 1), ("user_id", 1)], unique=True, name="uniq_trip_user"
         )
-        # Helpful single-field indexes
         await preferences_collection.create_index("user_id")
         await preferences_collection.create_index("trip_id")
 
         # Activities indexes
         await activities_collection.create_index("trip_id")
         await activities_collection.create_index("category")
+
+        # Trips indexes
+        await trips_collection.create_index("trip_code", unique=True)
+        await trips_collection.create_index("creator_id")
+        await trips_collection.create_index("members")
 
         print("✅ Database indexes created successfully")
     except Exception as e:
@@ -116,3 +118,11 @@ def get_activities_collection():
     """
     db = get_database()
     return db.activities
+
+
+def get_trips_collection():
+    """
+    Get the trips collection from the database
+    """
+    db = get_database()
+    return db.trips

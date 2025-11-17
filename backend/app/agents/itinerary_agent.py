@@ -229,9 +229,23 @@ class ItineraryAgent:
         )
 
         if self.llm is None:
-            # No LLM client available: treat as an error for this agent
-            reason = self._llm_unavailable_reason or "LLM client not initialized"
-            raise RuntimeError(f"LLM unavailable: {reason}")
+            if self._llm_unavailable_reason:
+                print(f"[{AGENT_LABEL}] LLM unavailable: {self._llm_unavailable_reason}")
+            out = ItineraryOut(
+                itinerary=[],
+                insights=["LLM is not available to generate itinerary."],
+                warnings=[
+                    "LLM unavailable; no itinerary generated",
+                    f"Reason: {self._llm_unavailable_reason}",
+                ]
+                if self._llm_unavailable_reason
+                else ["LLM unavailable; no itinerary generated"],
+                metrics={"latency_ms": int((time.time() - t0) * 1000)},
+                provenance=["llm_unavailable"],
+            )
+            agent_data.update(out.dict())
+            state["agent_data"] = agent_data
+            return state
 
         structured_llm = self.llm.with_structured_output(ItineraryOut)
         run = prompt | structured_llm

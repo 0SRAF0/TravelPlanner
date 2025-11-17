@@ -7,9 +7,11 @@ from app.core.config import APP_NAME, CORS_ORIGINS, SERVER_HOST, SERVER_PORT
 from app.db.database import close_database_connection, init_indexes, test_connection
 from app.router.activity import router as activity_router
 from app.router.auth import router as auth_router
-from app.router.chat import router as chat_router
+from app.router.trip import router as trip_router
 from app.router.perference import router as preference_router
 from app.router.system import router as system_router
+from app.router.chat import router as chat_router
+from app.router.location import router as location_router
 
 
 @asynccontextmanager
@@ -38,9 +40,11 @@ app.add_middleware(
 # Mount routers
 app.include_router(system_router)
 app.include_router(auth_router)
-app.include_router(chat_router)
+app.include_router(trip_router)
 app.include_router(preference_router)
 app.include_router(activity_router)
+app.include_router(chat_router)
+app.include_router(location_router)
 
 if __name__ == "__main__":
     import uvicorn

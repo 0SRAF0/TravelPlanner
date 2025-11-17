@@ -13,7 +13,7 @@ class Preference(BaseModel):
     Stores user travel preferences
     """
 
-    trip_id: str | None = Field(None, description="Trip ID for trips")
+    trip_id: str = Field(..., description="Trip ID for trips")
     user_id: str = Field(..., description="User's Google ID")
     budget_level: int | None = Field(
         default=None,
@@ -29,7 +29,7 @@ class Preference(BaseModel):
     notes: str | None = Field(None, description="Additional notes")
     available_dates: list[str] = Field(
         default_factory=list,
-        description="List of available date ranges in ISO format (e.g., ['2024-01-01:2024-01-15', '2024-02-10:2024-02-20'])",
+        description="List of available date ranges in format 'YYYY-MM-DD:YYYY-MM-DD' (e.g., ['2024-01-01:2024-01-15', '2024-02-10:2024-02-20'])",
     )
 
     # Timestamps
