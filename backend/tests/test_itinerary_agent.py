@@ -80,7 +80,9 @@ def _run_itinerary_agent_demo(mock_llm_instance: MagicMock) -> Dict[str, Any]:
             "app.agents.itinerary_agent.ChatGoogleGenerativeAI",
             return_value=mock_llm_instance,
         ),
-        patch("app.core.config.GOOGLE_AI_API_KEY", "mock_api_key"),
+        # Patch the imported name inside itinerary_agent since it uses:
+        # from app.core.config import GOOGLE_AI_API_KEY
+        patch("app.agents.itinerary_agent.GOOGLE_AI_API_KEY", "mock_api_key"),
     ):
         agent = ItineraryAgent()
 
@@ -185,6 +187,56 @@ def test_itinerary_agent_simple(mock_llm):
     # Verify LLM was called (through the structured output chain)
     mock_llm.with_structured_output.assert_called_once()
 
+
+def test_itinerary_agent_errors_without_api_key():
+    """
+    Ensure the agent raises an error when no API key is provided.
+    """
+    from app.agents.itinerary_agent import ItineraryAgent
+
+    trip_id = "test_trip_456"
+    destination = "Tokyo, Japan"
+    start_date = "2025-12-25"
+    end_date = "2025-12-26"
+    duration_days = 2
+
+    preferences_summary = {
+        "trip_id": trip_id,
+        "members": ["u1", "u2"],
+        "aggregated_vibes": {"culture": 0.8, "food": 0.7},
+        "budget_levels": ["3"],
+        "conflicts": [],
+        "ready_for_planning": True,
+        "coverage": 1.0,
+        "destination": destination,
+        "start_date": start_date,
+        "end_date": end_date,
+        "duration_days": duration_days,
+    }
+
+    input_state = {
+        "messages": [],
+        "trip_id": trip_id,
+        "agent_data": {
+            "preferences_summary": preferences_summary,
+            "destination": destination,
+            "start_date": start_date,
+            "end_date": end_date,
+            "duration_days": duration_days,
+            "activity_catalog": [
+                {"activity_id": "a1", "name": "Sushi place", "category": "Food"},
+                {"activity_id": "a2", "name": "Temple visit", "category": "Culture"},
+            ],
+        },
+    }
+
+    # No API key
+    with patch("app.agents.itinerary_agent.GOOGLE_AI_API_KEY", ""), \
+         patch("app.agents.itinerary_agent.ChatGoogleGenerativeAI") as chat_mock:
+        agent = ItineraryAgent()
+        with pytest.raises(RuntimeError, match="LLM unavailable: No API key found"):
+            agent.run(dict(input_state))
+        chat_mock.assert_not_called()
 
 if __name__ == "__main__":
     print("\n" + "🗓️" * 40)

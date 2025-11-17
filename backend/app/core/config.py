@@ -81,8 +81,20 @@ SERVER_PORT = _get_int_env("SERVER_PORT", 8060)
 DEBUG = os.environ.get("DEBUG", "true").lower() == "true"
 
 # === CORS Configuration ===
-CORS_ORIGINS = os.environ.get("CORS_ORIGINS").split(",")
-# Example: "http://localhost:3060,http://127.0.0.1:3060,http://localhost:3000,https://yourdomain.com"
+def _get_cors_origins() -> list[str]:
+    """
+    Return CORS origins from env or a safe default.
+    Example env format:
+      CORS_ORIGINS="http://localhost:3060,http://127.0.0.1:3060,http://localhost:3000,https://yourdomain.com"
+    """
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if not raw:
+        # Default to permissive wildcard for local/dev if not provided
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+CORS_ORIGINS = _get_cors_origins()
 
 # === Database Configuration ===
 MONGODB_URI = os.environ.get("MONGODB_URI")
