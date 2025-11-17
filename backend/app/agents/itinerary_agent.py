@@ -1,52 +1,54 @@
 from __future__ import annotations
-
-import json
-import time
-from typing import Any
-
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional, List, Literal
+from pydantic.v1 import BaseModel, Field, validator
+from langgraph.graph import StateGraph, END
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import END, StateGraph
-from pydantic.v1 import BaseModel, Field, validator
+import os
+import time
+import json
 
 from app.agents.agent_state import AgentState
 from app.agents.destination_research_agent import Activity, PreferencesSummaryIn
-from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL
+from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
 
-AGENT_LABEL = "itinerary_generation"
+
+AGENT_LABEL = "itinerary"
 
 
 # ====== Models ======
+
 
 class ItineraryItem(BaseModel):
     activity_id: str
     name: str
     start_time: str = Field(description="Start time in HH:MM format (24-hour)")
     end_time: str = Field(description="End time in HH:MM format (24-hour)")
-    notes: str | None = Field(default=None, description="Short notes or tips for this activity")
-    lat: float | None = None
-    lng: float | None = None
-    category: str | None = None
-    rough_cost: int | None = None
-    duration_min: int | None = None
+    notes: Optional[str] = Field(default=None, description="Short notes or tips for this activity")
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    category: Optional[str] = None
+    rough_cost: Optional[int] = None
+    duration_min: Optional[int] = None
 
 
 class DayItinerary(BaseModel):
     day: int = Field(description="Day number, starting from 1")
-    date: str | None = Field(default=None, description="Optional date for the day (YYYY-MM-DD)")
-    items: list[ItineraryItem] = Field(default_factory=list)
+    date: Optional[str] = Field(default=None, description="Optional date for the day (YYYY-MM-DD)")
+    items: List[ItineraryItem] = Field(default_factory=list)
 
 
 class ItineraryOut(BaseModel):
-    itinerary: list[DayItinerary] = Field(default_factory=list)
-    insights: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    metrics: dict[str, Any] = Field(default_factory=dict)
-    provenance: list[str] = Field(default_factory=list)
+    itinerary: List[DayItinerary] = Field(default_factory=list)
+    insights: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    provenance: List[str] = Field(default_factory=list)
 
     @validator("metrics", pre=True, always=True)
-    def _ensure_metrics_is_dict(cls, value: Any) -> dict[str, Any]:
+    def _ensure_metrics_is_dict(cls, value: Any) -> Dict[str, Any]:
         if value is None or value == "":
             return {}
         if isinstance(value, dict):
@@ -65,10 +67,12 @@ class ItineraryOut(BaseModel):
 class ItineraryGenerationInput(BaseModel):
     preferences_summary: PreferencesSummaryIn
     destination: str
-    activity_catalog: list[Activity]
+    activity_catalog: List[Activity]
     trip_duration_days: int = Field(default=3, description="Number of days for the trip")
-    start_date: str | None = Field(default=None, description="Optional start date for the trip (YYYY-MM-DD)")
-    hints: dict[str, Any] | None = None
+    start_date: Optional[str] = Field(
+        default=None, description="Optional start date for the trip (YYYY-MM-DD)"
+    )
+    hints: Optional[Dict[str, Any]] = None
 
 
 # ====== Prompt ======
@@ -103,18 +107,22 @@ Rules:
 
 # ====== Agent Implementation ======
 
+
 class ItineraryAgent:
     def __init__(self) -> None:
-        self._cache: dict[str, ItineraryOut] = {}
+        self._cache: Dict[str, ItineraryOut] = {}
         api_key = GOOGLE_AI_API_KEY
         self.llm = None
         self._llm_unavailable_reason: str = ""
         if api_key:
             try:
-                self.llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, temperature=0.7, api_key=api_key)
+                self.llm = ChatGoogleGenerativeAI(
+                    model=GOOGLE_AI_MODEL, temperature=0.7, api_key=api_key
+                )
             except Exception:
                 self.llm = None
                 import traceback
+
                 self._llm_unavailable_reason = "Failed to initialize Google LLM client"
                 try:
                     self._llm_unavailable_reason += f": {traceback.format_exc(limit=1).strip()}"
@@ -139,11 +147,13 @@ class ItineraryAgent:
         pref_summary = state.get("preferences_summary") or agent_data.get("preferences_summary")
         destination = state.get("destination") or agent_data.get("destination")
         activity_catalog = state.get("activity_catalog") or agent_data.get("activity_catalog")
-        trip_duration_days = state.get("trip_duration_days") or agent_data.get("trip_duration_days", 3)
+        trip_duration_days = state.get("trip_duration_days") or agent_data.get(
+            "trip_duration_days", 3
+        )
         start_date = state.get("start_date") or agent_data.get("start_date")
 
-        insights: list[str] = []
-        warnings: list[str] = []
+        insights: List[str] = []
+        warnings: List[str] = []
 
         if not pref_summary:
             warnings.append("Missing preferences summary")
@@ -153,7 +163,9 @@ class ItineraryAgent:
             insights.append("Provide a destination like 'City, Country'")
         if not activity_catalog:
             warnings.append("Missing activity catalog")
-            insights.append("Ensure destination research is performed by the DestinationResearchAgent")
+            insights.append(
+                "Ensure destination research is performed by the DestinationResearchAgent"
+            )
 
         if warnings:
             out = ItineraryOut(
@@ -170,12 +182,12 @@ class ItineraryAgent:
         # Validate inputs
         try:
             input_data = ItineraryGenerationInput(
-                preferences_summary=PreferencesSummaryIn(**pref_summary), # type: ignore
-                destination=destination, # type: ignore
-                activity_catalog=[Activity(**a) for a in activity_catalog], # type: ignore
-                trip_duration_days=trip_duration_days, # type: ignore
-                start_date=start_date, # type: ignore
-                hints=hints
+                preferences_summary=PreferencesSummaryIn(**pref_summary),  # type: ignore
+                destination=destination,  # type: ignore
+                activity_catalog=[Activity(**a) for a in activity_catalog],  # type: ignore
+                trip_duration_days=trip_duration_days,  # type: ignore
+                start_date=start_date,  # type: ignore
+                hints=hints,
             )
         except Exception as e:
             warnings.append(f"Invalid input data: {e}")
@@ -192,7 +204,7 @@ class ItineraryAgent:
 
         trip_id = input_data.preferences_summary.trip_id or (state.get("trip_id") or "trip")
         cache_key = f"{trip_id}|{input_data.destination}|{input_data.trip_duration_days}|{input_data.start_date}|{json.dumps(input_data.hints, sort_keys=True)}"
-        
+
         if cache_key in self._cache and not force:
             cached = self._cache[cache_key]
             agent_data.update(cached.dict())
@@ -209,24 +221,17 @@ class ItineraryAgent:
             "hints": input_data.hints,
         }
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM),
-            ("user", "Input:\n{payload}\n\nReturn JSON only."),
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", SYSTEM),
+                ("user", "Input:\n{payload}\n\nReturn JSON only."),
+            ]
+        )
 
         if self.llm is None:
-            if self._llm_unavailable_reason:
-                print(f"[{AGENT_LABEL}] LLM unavailable: {self._llm_unavailable_reason}")
-            out = ItineraryOut(
-                itinerary=[],
-                insights=["LLM is not available to generate itinerary."],
-                warnings=["LLM unavailable; no itinerary generated", f"Reason: {self._llm_unavailable_reason}"] if self._llm_unavailable_reason else ["LLM unavailable; no itinerary generated"],
-                metrics={"latency_ms": int((time.time() - t0) * 1000)},
-                provenance=["llm_unavailable"],
-            )
-            agent_data.update(out.dict())
-            state["agent_data"] = agent_data
-            return state
+            # No LLM client available: treat as an error for this agent
+            reason = self._llm_unavailable_reason or "LLM client not initialized"
+            raise RuntimeError(f"LLM unavailable: {reason}")
 
         structured_llm = self.llm.with_structured_output(ItineraryOut)
         run = prompt | structured_llm
@@ -238,7 +243,10 @@ class ItineraryAgent:
             out = ItineraryOut(
                 itinerary=[],
                 insights=["LLM failed to generate itinerary. Try adjusting inputs or hints."],
-                warnings=["LLM unavailable or failed; no itinerary generated", f"Error: {err_text}"],
+                warnings=[
+                    "LLM unavailable or failed; no itinerary generated",
+                    f"Error: {err_text}",
+                ],
                 metrics={"latency_ms": int((time.time() - t0) * 1000)},
                 provenance=["llm_failed"],
             )
@@ -247,14 +255,16 @@ class ItineraryAgent:
             return state
 
         metrics = dict(result.metrics or {})
-        metrics.update({
-            "generated_days": len(result.itinerary),
-            "total_activities": sum(len(day.items) for day in result.itinerary),
-            "latency_ms": int((time.time() - t0) * 1000),
-            "trip_id": trip_id,
-            "destination": destination,
-            "trip_duration_days": trip_duration_days,
-        })
+        metrics.update(
+            {
+                "generated_days": len(result.itinerary),
+                "total_activities": sum(len(day.items) for day in result.itinerary),
+                "latency_ms": int((time.time() - t0) * 1000),
+                "trip_id": trip_id,
+                "destination": destination,
+                "trip_duration_days": trip_duration_days,
+            }
+        )
 
         out = ItineraryOut(
             itinerary=result.itinerary or [],
@@ -286,7 +296,7 @@ class ItineraryAgent:
         return g.compile()
 
     # ---- Public API ----
-    def run(self, initial_state: dict[str, Any]) -> dict[str, Any]:
+    def run(self, initial_state: Dict[str, Any]) -> Dict[str, Any]:
         return self.app.invoke(initial_state)
 
 

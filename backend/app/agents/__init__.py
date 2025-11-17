@@ -1,24 +1,11 @@
-# agents package
-from .preference_agent import (
-    ItemCandidate,
-    PreferenceAgent,
-    ScoredItem,
-    TripPreferenceAggregate,
-    UserPreferenceProfile,
-    VectorIndex,
-    cosine,
-    embed_text,
-    get_embedding_model,
-)
+"""
+agents package
 
-__all__ = [
-    "PreferenceAgent",
-    "ItemCandidate",
-    "VectorIndex",
-    "embed_text",
-    "cosine",
-    "get_embedding_model",
-    "UserPreferenceProfile",
-    "TripPreferenceAggregate",
-    "ScoredItem",
-]
+Intentionally avoid importing submodules at package import time to prevent
+side effects (e.g., DB connections) during test collection. Import
+specific agents directly, e.g.:
+
+    from app.agents.itinerary_agent import ItineraryAgent
+"""
+
+__all__: list[str] = []
