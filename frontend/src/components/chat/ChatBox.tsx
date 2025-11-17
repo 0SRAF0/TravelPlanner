@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { chatService, type ChatMessage } from '../../services/chatService.ts';
+import { chatBotService, type ChatMessage } from '../../services/chatBotService.ts';
 
 interface ChatBoxProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
     setIsLoading(true);
 
     try {
-      const response = await chatService.sendMessage(userMessage.content, messages);
+      const response = await chatBotService.sendMessage(userMessage.content, messages);
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: response,

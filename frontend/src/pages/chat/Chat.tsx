@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
+import { API } from '../../services/api';
 
 interface Message {
   senderId: string;
@@ -36,7 +37,7 @@ export function Chat() {
     if (!tripId) return;
 
     // Connect to WebSocket
-    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:8060'}/ws/chat/${tripId}`;
+    const wsUrl = `${API.chat.chat}/${tripId}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {

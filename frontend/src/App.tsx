@@ -9,6 +9,8 @@ import TripDetail from './pages/trip/TripDetail.tsx';
 import PreferenceForm from './pages/preferences/PreferenceForm.tsx';
 import { Chat } from './pages/chat/Chat.tsx';
 import { authService } from './services/authService.ts';
+import { useEffect, useState } from "react";
+import { ChatButton } from "./components/chat";
 
 // Protected Route Component
 const ProtectedHome = () => {
@@ -30,6 +32,27 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
+
+  useEffect(() => {
+    const checkAuth = () => {
+      setIsAuthenticated(authService.isAuthenticated());
+    };
+
+    // Check on mount
+    checkAuth();
+
+    // Listen for storage changes (login/logout in other tabs or same tab)
+    window.addEventListener('storage', checkAuth);
+    // Also listen for custom events
+    window.addEventListener('auth-change', checkAuth);
+
+    return () => {
+      window.removeEventListener('storage', checkAuth);
+      window.removeEventListener('auth-change', checkAuth);
+    };
+  }, []);
+
   return (
     <Router>
       <div className="App">
@@ -74,6 +97,7 @@ function App() {
             }
           />
         </Routes>
+        {isAuthenticated && <ChatButton />}
       </div>
     </Router>
   );

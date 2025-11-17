@@ -5,6 +5,11 @@
 // Base API URL - can be configured via environment variables
 export const BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'http://localhost:8060';
 
+// Derive WebSocket base URL from BASE_URL
+export const WS_BASE_URL = BASE_URL.startsWith('https')
+  ? BASE_URL.replace(/^https/, 'wss')
+  : BASE_URL.replace(/^http/, 'ws');
+
 /**
  * API Endpoints
  */
@@ -29,8 +34,13 @@ export const API = {
     vote: `${BASE_URL}/activities/vote`,
   },
 
-  // Chat endpoints
+  // Chatbot endpoints
+  chatBot: {
+    send: `${BASE_URL}/chatbot`,
+  },
+
+  // Chat endpoints (WebSocket)
   chat: {
-    send: `${BASE_URL}/chat`,
+    chat: `${WS_BASE_URL}/chat`,
   },
 } as const;
