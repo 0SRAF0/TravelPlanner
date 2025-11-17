@@ -33,5 +33,4 @@ export const API = {
   chat: {
     send: `${BASE_URL}/chat`,
   },
-
 } as const;

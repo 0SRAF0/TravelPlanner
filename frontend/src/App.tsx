@@ -1,14 +1,14 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import "./App.css";
-import Header from "./components/header/Header.tsx";
-import { SignIn } from "./pages/signIn/SignIn.tsx";
-import Dashboard from "./pages/dashboard/dashboard.tsx";
-import { GoogleOAuthCallback } from "./pages/signIn/components/GoogleOAuthCallback.tsx";
-import { Home } from "./pages/home/home.tsx";
-import TripDetail from "./pages/trip/TripDetail.tsx";
-import PreferenceForm from "./pages/preferences/PreferenceForm.tsx";
-import { Chat } from "./pages/chat/Chat.tsx";
-import { authService } from "./services/authService.ts";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import './App.css';
+import Header from './components/header/Header.tsx';
+import { SignIn } from './pages/signIn/SignIn.tsx';
+import Dashboard from './pages/dashboard/dashboard.tsx';
+import { GoogleOAuthCallback } from './pages/signIn/components/GoogleOAuthCallback.tsx';
+import { Home } from './pages/home/home.tsx';
+import TripDetail from './pages/trip/TripDetail.tsx';
+import PreferenceForm from './pages/preferences/PreferenceForm.tsx';
+import { Chat } from './pages/chat/Chat.tsx';
+import { authService } from './services/authService.ts';
 
 // Protected Route Component
 const ProtectedHome = () => {
@@ -22,7 +22,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = authService.isAuthenticated();
 
   if (!isAuthenticated) {
-    window.location.href = "/sign-in";
+    window.location.href = '/sign-in';
     return null;
   }
 
@@ -59,10 +59,8 @@ function App() {
             element={
               <ProtectedRoute>
                 <PreferenceForm
-                  tripId={window.location.pathname.split("/")[2]}
-                  userId={
-                    JSON.parse(localStorage.getItem("user_info") || "{}").id
-                  }
+                  tripId={window.location.pathname.split('/')[2]}
+                  userId={JSON.parse(localStorage.getItem('user_info') || '{}').id}
                 />
               </ProtectedRoute>
             }

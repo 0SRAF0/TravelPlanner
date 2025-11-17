@@ -29,7 +29,10 @@ export default function ActivityList({
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type?: 'success' | 'error' | 'info' | 'warning';
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isDraggingRef = useRef(false);
@@ -39,7 +42,7 @@ export default function ActivityList({
   const gapPx = 14;
   const cardStyle = useMemo(
     () => ({ minWidth: `${cardWidthPx}px`, width: `${cardWidthPx}px` }),
-    [cardWidthPx]
+    [cardWidthPx],
   );
 
   const fetchData = useCallback(async () => {
@@ -138,11 +141,7 @@ export default function ActivityList({
         </button>
       </div>
 
-      {error && (
-        <div className="text-left text-danger text-sm mb-2 px-1">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-left text-danger text-sm mb-2 px-1">{error}</div>}
 
       {/* Scroll container */}
       <div
@@ -169,14 +168,22 @@ export default function ActivityList({
                   style={{
                     ...cardStyle,
                     height: cardHeightPx,
-                    background:
-                      'linear-gradient(135deg, rgba(0,0,0,0.06), rgba(0,0,0,0.02))',
+                    background: 'linear-gradient(135deg, rgba(0,0,0,0.06), rgba(0,0,0,0.02))',
                   }}
                 />
               ))
             : activities.map((a) => (
-                <div key={`${a.name}-${a.category}`} className="shrink-0" style={{ ...cardStyle, height: `${cardHeightPx}px` }}>
-                  <ActivityCard activity={a} onVote={onVote} className="h-full" modalMaxWidth={modalMaxWidth} />
+                <div
+                  key={`${a.name}-${a.category}`}
+                  className="shrink-0"
+                  style={{ ...cardStyle, height: `${cardHeightPx}px` }}
+                >
+                  <ActivityCard
+                    activity={a}
+                    onVote={onVote}
+                    className="h-full"
+                    modalMaxWidth={modalMaxWidth}
+                  />
                 </div>
               ))}
         </div>
@@ -192,5 +199,3 @@ export default function ActivityList({
     </div>
   );
 }
-
-

@@ -10,7 +10,8 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: "Hi! I'm your AI travel planning assistant. How can I help you plan your trip today?",
+      content:
+        "Hi! I'm your AI travel planning assistant. How can I help you plan your trip today?",
       timestamp: new Date(),
     },
   ]);
@@ -57,7 +58,8 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
     } catch (error) {
       const errorMessage: ChatMessage = {
         role: 'assistant',
-        content: error instanceof Error ? error.message : 'Sorry, something went wrong. Please try again.',
+        content:
+          error instanceof Error ? error.message : 'Sorry, something went wrong. Please try again.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -67,10 +69,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
   };
 
   const escapeHtml = (text: string) =>
-    text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   const formatMessage = (text: string) => {
     const escaped = escapeHtml(text);
@@ -103,12 +102,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
           className="text-white hover:bg-blue-700 rounded-full p-1 transition-colors"
           aria-label="Close chat"
         >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -145,8 +139,14 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
             <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
               <div className="flex space-x-1">
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div
+                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                  style={{ animationDelay: '0.1s' }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                  style={{ animationDelay: '0.2s' }}
+                ></div>
               </div>
             </div>
           </div>
@@ -172,12 +172,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
             disabled={isLoading || !input.trim()}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -191,4 +186,3 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
     </div>
   );
 };
-

@@ -25,12 +25,8 @@ export default function GoogleMapEmbed({
         style={{ width, height }}
       >
         <div className="text-center p-4">
-          <p className="text-sm text-gray-600">
-            Map unavailable: API key not configured
-          </p>
-          <p className="text-xs text-gray-500 mt-1">
-            Add VITE_GOOGLE_MAPS_API_KEY to .env
-          </p>
+          <p className="text-sm text-gray-600">Map unavailable: API key not configured</p>
+          <p className="text-xs text-gray-500 mt-1">Add VITE_GOOGLE_MAPS_API_KEY to .env</p>
         </div>
       </div>
     );
@@ -53,4 +49,3 @@ export default function GoogleMapEmbed({
     />
   );
 }
-

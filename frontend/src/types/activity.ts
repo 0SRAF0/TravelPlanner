@@ -1,15 +1,7 @@
 export interface Activity {
   trip_id: string;
   name: string;
-  category:
-    | "Food"
-    | "Nightlife"
-    | "Adventure"
-    | "Culture"
-    | "Relax"
-    | "Nature"
-    | "Other"
-    | string;
+  category: 'Food' | 'Nightlife' | 'Adventure' | 'Culture' | 'Relax' | 'Nature' | 'Other' | string;
   rough_cost?: number | null;
   duration_min?: number | null;
   lat?: number | null;
@@ -26,7 +18,7 @@ export interface VoteRequest {
   trip_id: string;
   activity_name: string;
   user_id: string;
-  vote: "up" | "down";
+  vote: 'up' | 'down';
 }
 
 export interface VoteResponse {

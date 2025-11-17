@@ -48,4 +48,3 @@ export const chatService = {
     return json?.data?.message || json?.message || 'Sorry, I could not process your request.';
   },
 };
-

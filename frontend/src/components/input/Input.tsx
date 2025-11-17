@@ -21,7 +21,7 @@ export default function Input({
   size = 'base',
   required = false,
   disabled = false,
-  onChange
+  onChange,
 }: InputProps) {
   const sizeClasses = (() => {
     switch (size) {

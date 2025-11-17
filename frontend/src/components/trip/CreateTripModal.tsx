@@ -1,32 +1,24 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import Modal from "../modal/Modal.tsx";
-import Button from "../button";
-import Input from "../input";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Modal from '../modal/Modal.tsx';
+import Button from '../button';
+import Input from '../input';
 
 interface CreateTripModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (tripData: {
-    trip_id: string;
-    trip_code: string;
-    trip_name: string;
-  }) => void;
+  onSuccess?: (tripData: { trip_id: string; trip_code: string; trip_name: string }) => void;
 }
 
-export default function CreateTripModal({
-  isOpen,
-  onClose,
-  onSuccess,
-}: CreateTripModalProps) {
+export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTripModalProps) {
   const navigate = useNavigate();
-  const [tripName, setTripName] = useState("");
+  const [tripName, setTripName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!tripName.trim()) {
-      setError("Please enter a trip name");
+      setError('Please enter a trip name');
       return;
     }
 
@@ -34,31 +26,28 @@ export default function CreateTripModal({
     setError(null);
 
     try {
-      const user = JSON.parse(localStorage.getItem("user_info") || "{}");
+      const user = JSON.parse(localStorage.getItem('user_info') || '{}');
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/trips/create`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            trip_name: tripName,
-            creator_id: user.id,
-          }),
-        }
-      );
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trip_name: tripName,
+          creator_id: user.id,
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to create trip");
+        throw new Error('Failed to create trip');
       }
 
       const result = await response.json();
 
       if (result.code === 0 && result.data) {
         onSuccess?.(result.data);
-        setTripName("");
+        setTripName('');
         onClose();
 
         // Redirect to preferences page
@@ -66,10 +55,10 @@ export default function CreateTripModal({
           state: { tripName: result.data.trip_name },
         });
       } else {
-        throw new Error(result.msg || "Failed to create trip");
+        throw new Error(result.msg || 'Failed to create trip');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create trip");
+      setError(err instanceof Error ? err.message : 'Failed to create trip');
     } finally {
       setLoading(false);
     }
@@ -88,9 +77,7 @@ export default function CreateTripModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Trip Name *
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Trip Name *</label>
             <Input
               type="text"
               placeholder="e.g., Summer Japan Trip"
@@ -113,7 +100,7 @@ export default function CreateTripModal({
             Cancel
           </button>
           <Button
-            text={loading ? "Creating..." : "Create Trip"}
+            text={loading ? 'Creating...' : 'Create Trip'}
             onClick={handleSubmit}
             size="base"
           />

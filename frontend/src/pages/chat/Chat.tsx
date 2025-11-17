@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import Button from "../../components/button/Button";
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import Button from '../../components/button/Button';
 
 interface Message {
   senderId: string;
   senderName: string;
   content: string;
-  type: "user" | "ai" | "agent_status";
+  type: 'user' | 'ai' | 'agent_status';
   timestamp: string;
   agent_name?: string;
   status?: string;
@@ -15,7 +15,7 @@ interface Message {
 
 interface AgentStatus {
   agent_name: string;
-  status: "starting" | "running" | "completed" | "error";
+  status: 'starting' | 'running' | 'completed' | 'error';
   step: string;
   timestamp: string;
 }
@@ -25,24 +25,22 @@ export function Chat() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
-  const [inputMessage, setInputMessage] = useState("");
+  const [inputMessage, setInputMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const currentUser = JSON.parse(localStorage.getItem("user_info") || "{}");
+  const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
 
   useEffect(() => {
     if (!tripId) return;
 
     // Connect to WebSocket
-    const wsUrl = `${
-      import.meta.env.VITE_WS_URL || "ws://localhost:8060"
-    }/ws/chat/${tripId}`;
+    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:8060'}/ws/chat/${tripId}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("[Chat] WebSocket connected");
+      console.log('[Chat] WebSocket connected');
       setIsConnected(true);
     };
 
@@ -50,11 +48,9 @@ export function Chat() {
       const message = JSON.parse(event.data);
 
       // Handle agent status updates separately
-      if (message.type === "agent_status") {
+      if (message.type === 'agent_status') {
         setAgentStatuses((prev) => {
-          const existing = prev.findIndex(
-            (s) => s.agent_name === message.agent_name
-          );
+          const existing = prev.findIndex((s) => s.agent_name === message.agent_name);
           if (existing >= 0) {
             const updated = [...prev];
             updated[existing] = message;
@@ -68,11 +64,11 @@ export function Chat() {
     };
 
     ws.onerror = (error) => {
-      console.error("[Chat] WebSocket error:", error);
+      console.error('[Chat] WebSocket error:', error);
     };
 
     ws.onclose = () => {
-      console.log("[Chat] WebSocket disconnected");
+      console.log('[Chat] WebSocket disconnected');
       setIsConnected(false);
     };
 
@@ -85,26 +81,26 @@ export function Chat() {
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSendMessage = () => {
     if (!inputMessage.trim() || !wsRef.current || !isConnected) return;
 
     const messageData = {
-      senderId: currentUser.id || "unknown",
-      senderName: currentUser.name || "Anonymous",
+      senderId: currentUser.id || 'unknown',
+      senderName: currentUser.name || 'Anonymous',
       content: inputMessage,
-      type: "user",
+      type: 'user',
       timestamp: new Date().toISOString(),
     };
 
     wsRef.current.send(JSON.stringify(messageData));
-    setInputMessage("");
+    setInputMessage('');
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -112,31 +108,31 @@ export function Chat() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "starting":
-        return "bg-yellow-100 border-yellow-300 text-yellow-800";
-      case "running":
-        return "bg-blue-100 border-blue-300 text-blue-800";
-      case "completed":
-        return "bg-green-100 border-green-300 text-green-800";
-      case "error":
-        return "bg-red-100 border-red-300 text-red-800";
+      case 'starting':
+        return 'bg-yellow-100 border-yellow-300 text-yellow-800';
+      case 'running':
+        return 'bg-blue-100 border-blue-300 text-blue-800';
+      case 'completed':
+        return 'bg-green-100 border-green-300 text-green-800';
+      case 'error':
+        return 'bg-red-100 border-red-300 text-red-800';
       default:
-        return "bg-gray-100 border-gray-300 text-gray-800";
+        return 'bg-gray-100 border-gray-300 text-gray-800';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "starting":
-        return "⏳";
-      case "running":
-        return "⚙️";
-      case "completed":
-        return "✅";
-      case "error":
-        return "❌";
+      case 'starting':
+        return '⏳';
+      case 'running':
+        return '⚙️';
+      case 'completed':
+        return '✅';
+      case 'error':
+        return '❌';
       default:
-        return "📝";
+        return '📝';
     }
   };
 
@@ -146,9 +142,7 @@ export function Chat() {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Group Trip Chat
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900">Group Trip Chat</h1>
             <p className="text-sm text-gray-600">
               {isConnected ? (
                 <span className="text-green-600">● Connected</span>
@@ -157,10 +151,7 @@ export function Chat() {
               )}
             </p>
           </div>
-          <Button
-            text="Back to Trip"
-            onClick={() => navigate(`/trip/${tripId}`)}
-          />
+          <Button text="Back to Trip" onClick={() => navigate(`/trip/${tripId}`)} />
         </div>
 
         <div className="flex gap-4">
@@ -173,32 +164,22 @@ export function Chat() {
             {agentStatuses.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 <p className="text-sm">No active agents</p>
-                <p className="text-xs mt-2">
-                  Agents will appear here when working
-                </p>
+                <p className="text-xs mt-2">Agents will appear here when working</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {agentStatuses.map((agent, idx) => (
                   <div
                     key={idx}
-                    className={`border-2 rounded-lg p-3 ${getStatusColor(
-                      agent.status
-                    )}`}
+                    className={`border-2 rounded-lg p-3 ${getStatusColor(agent.status)}`}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">
-                        {getStatusIcon(agent.status)}
-                      </span>
-                      <span className="font-semibold text-sm">
-                        {agent.agent_name}
-                      </span>
+                      <span className="text-lg">{getStatusIcon(agent.status)}</span>
+                      <span className="font-semibold text-sm">{agent.agent_name}</span>
                     </div>
-                    <p className="text-xs font-medium mb-1">
-                      Status: {agent.status}
-                    </p>
+                    <p className="text-xs font-medium mb-1">Status: {agent.status}</p>
                     <p className="text-xs">{agent.step}</p>
-                    {agent.status === "running" && (
+                    {agent.status === 'running' && (
                       <div className="mt-2">
                         <div className="w-full bg-gray-200 rounded-full h-1.5">
                           <div className="bg-blue-600 h-1.5 rounded-full animate-pulse w-3/4"></div>
@@ -227,26 +208,20 @@ export function Chat() {
                   <div
                     key={idx}
                     className={`flex ${
-                      msg.senderId === currentUser.id
-                        ? "justify-end"
-                        : "justify-start"
+                      msg.senderId === currentUser.id ? 'justify-end' : 'justify-start'
                     }`}
                   >
                     <div
                       className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                        msg.type === "ai"
-                          ? "bg-blue-100 border border-blue-300"
+                        msg.type === 'ai'
+                          ? 'bg-blue-100 border border-blue-300'
                           : msg.senderId === currentUser.id
-                          ? "bg-indigo-600 text-white"
-                          : "bg-gray-200 text-gray-900"
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-200 text-gray-900'
                       }`}
                     >
-                      <p className="text-xs font-semibold mb-1 opacity-75">
-                        {msg.senderName}
-                      </p>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {msg.content}
-                      </p>
+                      <p className="text-xs font-semibold mb-1 opacity-75">{msg.senderName}</p>
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                       <p className="text-xs mt-1 opacity-60">
                         {new Date(msg.timestamp).toLocaleTimeString()}
                       </p>
@@ -272,8 +247,7 @@ export function Chat() {
                 <Button text="Send" onClick={handleSendMessage} />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                💡 Tip: Type "leggo" in your message to trigger AI travel
-                suggestions
+                💡 Tip: Type "leggo" in your message to trigger AI travel suggestions
               </p>
             </div>
           </div>

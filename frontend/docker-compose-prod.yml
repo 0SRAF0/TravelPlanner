@@ -10,6 +10,5 @@ services:
       args:
         VITE_APP_API_BASE_URL: ${VITE_APP_API_BASE_URL}
     ports:
-      - "3060:80"
+      - '3060:80'
     restart: unless-stopped
-

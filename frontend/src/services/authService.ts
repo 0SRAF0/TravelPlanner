@@ -65,11 +65,11 @@ export const authService = {
    */
   async getAuthConfig(): Promise<AuthConfig> {
     const response = await fetch(API.auth.config);
-    
+
     if (!response.ok) {
       throw new Error('Failed to get auth config');
     }
-    
+
     const json = await response.json();
     return json?.data as AuthConfig;
   },
@@ -128,7 +128,7 @@ export const authService = {
   getUser(): UserInfo | null {
     const userStr = localStorage.getItem('user_info');
     if (!userStr) return null;
-    
+
     try {
       return JSON.parse(userStr);
     } catch {
@@ -156,8 +156,9 @@ export const authService = {
   async initiateGoogleLogin(): Promise<void> {
     try {
       const config = await this.getAuthConfig();
-      
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+
+      const authUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${config.google_client_id}&` +
         `redirect_uri=${encodeURIComponent(config.redirect_uri)}&` +
         `response_type=code&` +
@@ -172,4 +173,3 @@ export const authService = {
     }
   },
 };
-

@@ -48,9 +48,9 @@ export const GoogleOAuthCallback = () => {
 
         // Redirect to dashboard
         navigate('/dashboard', { replace: true });
-
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to complete authentication';
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to complete authentication';
         setError(errorMessage);
         setIsProcessing(false);
         console.error('Authentication error:', err);
@@ -104,4 +104,3 @@ export const GoogleOAuthCallback = () => {
     </div>
   );
 };
-

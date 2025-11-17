@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import Button from "../button";
-import { authService, type UserInfo } from "../../services/authService.ts";
+import Button from '../button';
+import { authService, type UserInfo } from '../../services/authService.ts';
 import LogoFull from '../../../assets/full-logo.svg';
 
 const maskEmail = (email: string, minLocalLength: number = 12): string => {
@@ -118,7 +118,12 @@ export default function Header() {
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
 

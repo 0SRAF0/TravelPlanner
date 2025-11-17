@@ -6,7 +6,7 @@ import logoWhite from '../../../assets/icon-logo-white.svg';
 
 /**
  * Login Page
- * 
+ *
  * Displays the login interface with Google OAuth option.
  */
 export const SignIn = () => {
@@ -37,27 +37,23 @@ export const SignIn = () => {
                 <img src={logoWhite} alt="Travel Planner logo" className="w-8 h-8" />
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Welcome to Travel Planner
-            </h1>
-            <p className="text-gray-600">
-              Sign in to start planning your next adventure
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Travel Planner</h1>
+            <p className="text-gray-600">Sign in to start planning your next adventure</p>
           </div>
 
           {/* Error Alert */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start">
-                <svg 
-                  className="w-5 h-5 text-red-600 mt-0.5 mr-3" 
-                  fill="currentColor" 
+                <svg
+                  className="w-5 h-5 text-red-600 mt-0.5 mr-3"
+                  fill="currentColor"
                   viewBox="0 0 20 20"
                 >
-                  <path 
-                    fillRule="evenodd" 
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" 
-                    clipRule="evenodd" 
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
                   />
                 </svg>
                 <div className="flex-1">
@@ -79,9 +75,7 @@ export const SignIn = () => {
               <div className="w-full border-t border-gray-300"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">
-                Secure authentication with Google
-              </span>
+              <span className="px-2 bg-white text-gray-500">Secure authentication with Google</span>
             </div>
           </div>
 

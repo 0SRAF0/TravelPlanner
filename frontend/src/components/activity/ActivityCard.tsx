@@ -5,9 +5,7 @@ import GoogleMapEmbed from '../map/GoogleMapEmbed';
 
 type ColorSet = { primary: string; secondary: string };
 
-const COLOR_SETS: ColorSet[] = [
-  { primary: '#000', secondary: '#FFF' },
-];
+const COLOR_SETS: ColorSet[] = [{ primary: '#000', secondary: '#FFF' }];
 
 export interface ActivityCardProps {
   activity: Activity;
@@ -48,7 +46,12 @@ function Avatar({ label, bg, color }: { label: string; bg: string; color: string
   );
 }
 
-export default function ActivityCard({ activity, onVote, className, modalMaxWidth = '672px' }: ActivityCardProps) {
+export default function ActivityCard({
+  activity,
+  onVote,
+  className,
+  modalMaxWidth = '672px',
+}: ActivityCardProps) {
   const [showModal, setShowModal] = useState(false);
   const [lastVote, setLastVote] = useState<'up' | 'down' | null>(null);
 
@@ -126,10 +129,7 @@ export default function ActivityCard({ activity, onVote, className, modalMaxWidt
         width="100%"
         maxWidth={modalMaxWidth}
       >
-        <div
-          className="max-h-[85vh] overflow-y-auto"
-          style={{ color: colorSet.secondary }}
-        >
+        <div className="max-h-[85vh] overflow-y-auto" style={{ color: colorSet.secondary }}>
           {/* Header */}
           <div className="mb-6">
             <h2 className="text-3xl font-extrabold mb-3 leading-tight">{activity.name}</h2>
@@ -140,22 +140,28 @@ export default function ActivityCard({ activity, onVote, className, modalMaxWidt
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
               <div className="text-sm opacity-80 mb-1">Duration</div>
-              <div className="text-xl font-bold">{formatDuration(activity.duration_min ?? undefined)}</div>
+              <div className="text-xl font-bold">
+                {formatDuration(activity.duration_min ?? undefined)}
+              </div>
             </div>
             <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
               <div className="text-sm opacity-80 mb-1">Cost</div>
-              <div className="text-xl font-bold">{formatCost(activity.rough_cost ?? undefined)}</div>
+              <div className="text-xl font-bold">
+                {formatCost(activity.rough_cost ?? undefined)}
+              </div>
             </div>
           </div>
 
           {/* Score */}
           <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
             <div className="text-sm opacity-80 mb-1">Match Score</div>
-            <div className="text-3xl font-extrabold">{Math.round((activity.score ?? 0) * 100)}%</div>
+            <div className="text-3xl font-extrabold">
+              {Math.round((activity.score ?? 0) * 100)}%
+            </div>
           </div>
 
           {/* Location & Map */}
-          {(activity.lat != null && activity.lng != null) && (
+          {activity.lat != null && activity.lng != null && (
             <div className="mb-6">
               <div className="text-sm opacity-80 mb-2">Location</div>
 
@@ -169,7 +175,6 @@ export default function ActivityCard({ activity, onVote, className, modalMaxWidt
                   className="shadow-md"
                 />
               </div>
-
             </div>
           )}
 
@@ -199,7 +204,10 @@ export default function ActivityCard({ activity, onVote, className, modalMaxWidt
           {activity.rationale && (
             <div className="mb-6">
               <div className="text-sm opacity-80 mb-2">Why this activity?</div>
-              <div className="text-base leading-relaxed p-4 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}>
+              <div
+                className="text-base leading-relaxed p-4 rounded-xl"
+                style={{ backgroundColor: 'rgba(0,0,0,0.1)' }}
+              >
                 {activity.rationale}
               </div>
             </div>
@@ -211,14 +219,22 @@ export default function ActivityCard({ activity, onVote, className, modalMaxWidt
               <div className="text-sm opacity-80 mb-3">Good for</div>
               <div className="flex flex-wrap gap-3">
                 {activity.fits.map((fitId) => (
-                  <Avatar key={fitId} label={fitId} bg={colorSet.secondary} color={colorSet.primary} />
+                  <Avatar
+                    key={fitId}
+                    label={fitId}
+                    bg={colorSet.secondary}
+                    color={colorSet.primary}
+                  />
                 ))}
               </div>
             </div>
           )}
 
           {/* Vote Buttons in Modal */}
-          <div className="flex items-center gap-4 pt-4 border-t-2" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
+          <div
+            className="flex items-center gap-4 pt-4 border-t-2"
+            style={{ borderColor: 'rgba(255,255,255,0.2)' }}
+          >
             <button
               onClick={() => handleVote('up')}
               className={`w-14 h-14 rounded-xl text-2xl font-bold border-2 transition-all flex items-center justify-center ${
@@ -251,5 +267,3 @@ export default function ActivityCard({ activity, onVote, className, modalMaxWidt
     </>
   );
 }
-
-

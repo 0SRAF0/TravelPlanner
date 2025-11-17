@@ -30,26 +30,19 @@ export default function Modal({
   const modalStyle = {
     backgroundColor,
     ...(width && { width }),
-    ...(maxWidth && { maxWidth })
+    ...(maxWidth && { maxWidth }),
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center"
-    >
-      {mask && (
-        <div className="absolute inset-0 bg-black/25" onClick={handleOverlayClick} />
-      )}
-      
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {mask && <div className="absolute inset-0 bg-black/25" onClick={handleOverlayClick} />}
+
       {unstyled ? (
-        <div 
-          className="relative mx-4"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="relative mx-4" onClick={(e) => e.stopPropagation()}>
           {children}
         </div>
       ) : (
-        <div 
+        <div
           className="relative bg-white rounded-3xl px-6 py-12 max-w-md w-full mx-4"
           style={modalStyle}
           onClick={(e) => e.stopPropagation()}

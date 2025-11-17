@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from 'react';
 
 interface LocationSuggestion {
   place_id: string;
@@ -19,8 +19,8 @@ interface LocationAutocompleteProps {
 export default function LocationAutocomplete({
   value,
   onChange,
-  placeholder = "e.g., Tokyo, Japan",
-  className = "",
+  placeholder = 'e.g., Tokyo, Japan',
+  className = '',
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -31,15 +31,12 @@ export default function LocationAutocomplete({
   // Close suggestions when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const fetchSuggestions = async (input: string) => {
@@ -51,13 +48,11 @@ export default function LocationAutocomplete({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL
-        }/locations/autocomplete?input=${encodeURIComponent(input)}`
+        `${import.meta.env.VITE_API_URL}/locations/autocomplete?input=${encodeURIComponent(input)}`,
       );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch suggestions");
+        throw new Error('Failed to fetch suggestions');
       }
 
       const result = await response.json();
@@ -66,7 +61,7 @@ export default function LocationAutocomplete({
         setShowSuggestions(true);
       }
     } catch (error) {
-      console.error("Error fetching location suggestions:", error);
+      console.error('Error fetching location suggestions:', error);
       setSuggestions([]);
     } finally {
       setIsLoading(false);
@@ -133,14 +128,11 @@ export default function LocationAutocomplete({
         </div>
       )}
 
-      {showSuggestions &&
-        value.length >= 2 &&
-        suggestions.length === 0 &&
-        !isLoading && (
-          <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-lg p-4 text-center text-gray-500 text-sm">
-            No locations found
-          </div>
-        )}
+      {showSuggestions && value.length >= 2 && suggestions.length === 0 && !isLoading && (
+        <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-lg p-4 text-center text-gray-500 text-sm">
+          No locations found
+        </div>
+      )}
     </div>
   );
 }

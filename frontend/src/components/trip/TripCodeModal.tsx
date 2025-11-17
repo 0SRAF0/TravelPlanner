@@ -1,6 +1,6 @@
-import { useState } from "react";
-import Modal from "../modal/Modal.tsx";
-import Button from "../button/Button.tsx";
+import { useState } from 'react';
+import Modal from '../modal/Modal.tsx';
+import Button from '../button/Button.tsx';
 
 interface TripCodeModalProps {
   isOpen: boolean;
@@ -35,26 +35,17 @@ export default function TripCodeModal({
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
 
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Trip Created!
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Trip Created!</h2>
           <p className="text-gray-600">{tripName}</p>
         </div>
 
         <div className="bg-gray-50 rounded-xl p-6">
-          <p className="text-sm text-gray-600 mb-3">
-            Share this code with your friends:
-          </p>
+          <p className="text-sm text-gray-600 mb-3">Share this code with your friends:</p>
           <div className="flex items-center justify-center gap-3">
             <div className="text-4xl font-bold tracking-wider text-gray-900 font-mono">
               {tripCode}
@@ -98,11 +89,7 @@ export default function TripCodeModal({
         </div>
 
         <div className="space-y-3">
-          <Button
-            text="Set My Preferences"
-            onClick={onGoToPreferences}
-            size="lg"
-          />
+          <Button text="Set My Preferences" onClick={onGoToPreferences} size="lg" />
           <button
             onClick={onClose}
             className="w-full text-gray-600 hover:text-gray-900 text-sm font-medium"

@@ -14,7 +14,8 @@ export const activityService = {
     const url = new URL(API.activities.list);
     url.searchParams.set('trip_id', params.trip_id);
     if (params.category) url.searchParams.set('category', params.category);
-    if (typeof params.min_score === 'number') url.searchParams.set('min_score', String(params.min_score));
+    if (typeof params.min_score === 'number')
+      url.searchParams.set('min_score', String(params.min_score));
     if (typeof params.limit === 'number') url.searchParams.set('limit', String(params.limit));
 
     const token = authService.getToken?.();
