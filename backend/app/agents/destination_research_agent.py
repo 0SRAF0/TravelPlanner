@@ -171,7 +171,10 @@ class DestinationResearchAgent:
             try:
                 # Import lazily
                 from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
-                self.llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, temperature=0, api_key=api_key)
+
+                self.llm = ChatGoogleGenerativeAI(
+                    model=GOOGLE_AI_MODEL, temperature=0, api_key=api_key
+                )
             except Exception:
                 # If client construction fails, continue without LLM; downstream will use fallback
                 self.llm = None

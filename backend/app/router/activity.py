@@ -58,7 +58,7 @@ async def vote_activity(
     trip_id: str,
     activity_name: str,
     user_id: str,
-    vote: str  # 'up' or 'down'
+    vote: str,  # 'up' or 'down'
 ):
     # TODO: Store votes and potentially re-rank activities
     pass

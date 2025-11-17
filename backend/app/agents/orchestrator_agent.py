@@ -88,9 +88,7 @@ def _needs_itinerary_generation(state: AgentState) -> bool:
     agent_data = state.get("agent_data", {}) or {}
     has_catalog = agent_data.get("activity_catalog") is not None
     has_itinerary = agent_data.get("itinerary") is not None
-    trip_duration_days = agent_data.get("trip_duration_days") or state.get(
-        "trip_duration_days"
-    )
+    trip_duration_days = agent_data.get("trip_duration_days") or state.get("trip_duration_days")
     return has_catalog and bool(trip_duration_days) and not has_itinerary
 
 
@@ -138,9 +136,7 @@ def supervisor_agent(state: AgentState) -> AgentState:
     }
 
     history_text = "\n".join(
-        getattr(m, "content", "")
-        for m in state.get("messages", [])
-        if hasattr(m, "content")
+        getattr(m, "content", "") for m in state.get("messages", []) if hasattr(m, "content")
     )
 
     user_prompt = f"""State snapshot:

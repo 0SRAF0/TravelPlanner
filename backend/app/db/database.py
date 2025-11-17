@@ -56,7 +56,7 @@ async def init_indexes():
         # Activities indexes
         await activities_collection.create_index("trip_id")
         await activities_collection.create_index("category")
-        
+
         # Trips indexes
         await trips_collection.create_index("trip_code", unique=True)
         await trips_collection.create_index("creator_id")
@@ -65,6 +65,7 @@ async def init_indexes():
         print("✅ Database indexes created successfully")
     except Exception as e:
         print(f"⚠️  Index creation warning: {e}")
+
 
 async def close_database_connection():
     """
@@ -117,6 +118,7 @@ def get_activities_collection():
     """
     db = get_database()
     return db.activities
+
 
 def get_trips_collection():
     """

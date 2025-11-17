@@ -115,12 +115,12 @@ async def add_preference(body: Preference):
         )
 
         await col.insert_one(preference_doc.model_dump())
-        
+
     # Track that this user has submitted preferences for this trip (both create and update)
     try:
         db = get_database()
         trips_collection = db.trips
-        
+
         # Try ObjectId first, then fallback to string ID
         try:
             result = await trips_collection.update_one(
@@ -132,8 +132,10 @@ async def add_preference(body: Preference):
                 {"trip_id": tid},
                 {"$addToSet": {"members_with_preferences": uid}},
             )
-        
-        print(f"[add_preference] Updated trip member status: matched={result.matched_count}, modified={result.modified_count}")
+
+        print(
+            f"[add_preference] Updated trip member status: matched={result.matched_count}, modified={result.modified_count}"
+        )
     except Exception as e:
         print(f"[add_preference] Warning: could not update trip member status: {e}")
 
