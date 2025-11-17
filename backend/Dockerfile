@@ -7,7 +7,7 @@
 # ENV PYTHONUNBUFFERED=1
 
 # Base image with Python
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Make builds predictable and logs immediate
 ENV PIP_NO_CACHE_DIR=1 \
