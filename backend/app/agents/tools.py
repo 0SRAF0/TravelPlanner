@@ -5,7 +5,7 @@ from app.db.database import get_preferences_collection
 
 
 @tool
-async def get_all_trip_preferences(trip_id: str) -> Dict[str, Any]:
+async def get_all_trip_preferences(trip_id: str) -> dict[str, Any]:
     """
     Fetch all user preferences for a specific trip.
 

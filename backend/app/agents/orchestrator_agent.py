@@ -8,7 +8,7 @@ from app.agents.agent_state import AgentState
 from app.agents.destination_research_agent import DestinationResearchAgent
 from app.agents.itinerary_agent import ItineraryAgent
 from app.agents.preference_agent import PreferenceAgent
-from app.core.config import GOOGLE_AI_MODEL
+from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
 
 # --- Instantiate agents ---
 preference_agent = PreferenceAgent()
@@ -35,7 +35,15 @@ WORKERS: dict[str, dict[str, str]] = {
 }
 
 # --- LLM for supervision ---
-llm = ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL)
+try:
+    # Prefer explicit API key; avoid ADC requirement in local/dev
+    llm = (
+        ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, api_key=GOOGLE_AI_API_KEY)
+        if GOOGLE_AI_API_KEY
+        else None
+    )
+except Exception:
+    llm = None
 
 
 class SupervisorChoice(BaseModel):
@@ -121,7 +129,6 @@ def supervisor_agent(state: AgentState) -> AgentState:
     agent_data = state.get("agent_data", {}) or {}
     snapshot = {
         "trip_id": trip_id,
-        "user_id": state.get("user_id"),
         "goal": state.get("goal", ""),
         "destination": agent_data.get("destination", ""),
         "has_preferences_summary": bool(agent_data.get("preferences_summary")),
@@ -143,6 +150,26 @@ def supervisor_agent(state: AgentState) -> AgentState:
 History:
 {history_text}
 """
+
+    # If LLM unavailable, fall back to deterministic routing
+    if llm is None:
+        next_task = deterministic_suggestion or "end"
+        reason = (
+            "LLM unavailable; using deterministic routing"
+            if deterministic_suggestion
+            else "LLM unavailable; ending workflow"
+        )
+        print(f"\n[SUPERVISOR - Step {steps}]")
+        print(f"  Next task: {next_task}")
+        print(f"  Reason: {reason}")
+        print(f"  Deterministic suggestion: {deterministic_suggestion}")
+        print(f"  State snapshot: {snapshot}")
+        return {
+            "next_task": next_task,
+            "reason": reason,
+            "steps": steps,
+            "done": next_task == "end",
+        }
 
     choice = llm.with_structured_output(SupervisorChoice).invoke(
         [
@@ -190,23 +217,23 @@ def agent_router(state: AgentState) -> str:
 
 
 # ---- Agent wrappers for proper state handling ----
-def preference_agent_wrapper(state: AgentState) -> AgentState:
+async def preference_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running preference_agent...")
-    result = preference_agent.app.invoke(state)
+    result = await preference_agent.app.ainvoke(state)
     print("[AGENT] preference_agent completed.")
     return result
 
 
-def destination_research_agent_wrapper(state: AgentState) -> AgentState:
+async def destination_research_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running destination_research_agent...")
-    result = destination_research_agent.app.invoke(state)
+    result = await destination_research_agent.app.ainvoke(state)
     print("[AGENT] destination_research_agent completed.")
     return result
 
 
-def itinerary_agent_wrapper(state: AgentState) -> AgentState:
+async def itinerary_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running itinerary_agent...")
-    result = itinerary_agent.app.invoke(state)
+    result = await itinerary_agent.app.ainvoke(state)
     print("[AGENT] itinerary_agent completed.")
     return result
 
@@ -225,7 +252,7 @@ graph.add_conditional_edges(
     {
         "preference_agent": "preference_agent",
         "destination_research_agent": "destination_research_agent",
-        "itinerary_planner": "itinerary_agent",
+        "itinerary_agent": "itinerary_agent",
         "end": END,
     },
 )
@@ -238,12 +265,12 @@ app = graph.compile(checkpointer=checkpointer)
 config = {"configurable": {"thread_id": "1"}, "recursion_limit": 50}
 
 
-def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
+async def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     """
     Run the orchestrator with an initial state.
 
     Args:
-        initial_state: Initial state containing trip_id, user_id, goal, etc.
+        initial_state: Initial state containing trip_id, goal, etc.
 
     Returns:
         Final state after workflow completion
@@ -251,7 +278,6 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     base: AgentState = {
         "messages": [],
         "trip_id": "",
-        "user_id": "",
         "agent_data": {},
         "agent_scratch": {},
         "steps": 0,
@@ -269,11 +295,10 @@ def run_orchestrator_agent(initial_state: AgentState) -> AgentState:
     print(f"\n{'=' * 60}")
     print("Starting orchestrator")
     print(f"Trip ID: {base.get('trip_id', 'N/A')}")
-    print(f"User ID: {base.get('user_id', 'N/A')}")
     print(f"Goal: {base.get('goal', 'N/A')}")
     print(f"{'=' * 60}\n")
 
-    result = app.invoke(base, config=config)
+    result = await app.ainvoke(base, config=config)
 
     print(f"\n{'=' * 60}")
     print(f"Orchestrator completed after {result.get('steps', 0)} steps")

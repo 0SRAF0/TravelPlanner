@@ -1,99 +1,113 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
-from pydantic import BaseModel
-
-from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL, JWT_ALGORITHM, JWT_SECRET
-from app.models.common import APIResponse
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Dict, List
+from datetime import datetime
+from app.db.database import get_database
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
-security = HTTPBearer()
+
+# Store active connections: chatId -> [websocket1, websocket2, ...]
+active_connections: Dict[str, List[WebSocket]] = {}
 
 
-class ChatRequest(BaseModel):
-    message: str
-    history: list[dict[str, str]] = []
+async def broadcast_to_chat(chat_id: str, message_data: dict):
+  """
+  Broadcast a message to all connected clients in a specific chat.
+  Can be called from other modules (e.g., orchestrator).
+  """
+  if chat_id in active_connections:
+    for connection in active_connections[chat_id]:
+      try:
+        await connection.send_json(message_data)
+      except Exception as e:
+        print(f"[broadcast] Failed to send to connection: {e}")
 
 
-def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Extract user ID from JWT token."""
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
-        return user_id
-    except JWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
+@router.websocket("/{chat_id}")
+async def chat_websocket(websocket: WebSocket, chat_id: str):
+  await websocket.accept()
+
+  # Add to active connections
+  if chat_id not in active_connections:
+    active_connections[chat_id] = []
+  active_connections[chat_id].append(websocket)
+
+  try:
+    while True:
+      # Receive message from client
+      data = await websocket.receive_json()
+
+      # Get MongoDB collections
+      db = get_database()
+      messages_collection = db.messages
+
+      # Save user message to MongoDB
+      message_doc = {
+        "chatId": chat_id,
+        "senderId": data.get("senderId"),
+        "senderName": data.get("senderName"),
+        "content": data.get("content"),
+        "type": "user",
+        "createdAt": datetime.utcnow()
+      }
+      await messages_collection.insert_one(message_doc)
+
+      # Broadcast user message to all clients in this chat
+      for connection in active_connections[chat_id]:
+        await connection.send_json(data)
+
+      # Check if message contains "leggo" to trigger AI
+      if "leggo" in data.get("content", "").lower():
+        # Get full conversation history
+        messages = await messages_collection.find(
+          {"chatId": chat_id}
+        ).sort("createdAt", 1).to_list(length=None)
+
+        # Generate AI response
+        ai_response = await generate_ai_response(messages)
+
+        # Save AI message to MongoDB
+        ai_message_doc = {
+          "chatId": chat_id,
+          "senderId": None,
+          "senderName": "AI Assistant",
+          "content": ai_response,
+          "type": "ai",
+          "createdAt": datetime.utcnow()
+        }
+        await messages_collection.insert_one(ai_message_doc)
+
+        # Broadcast AI message to all clients
+        ai_data = {
+          "senderId": "ai",
+          "senderName": "AI Assistant",
+          "content": ai_response,
+          "type": "ai",
+          "timestamp": datetime.utcnow().isoformat()
+        }
+        for connection in active_connections[chat_id]:
+          await connection.send_json(ai_data)
+
+  except WebSocketDisconnect:
+    # Remove from active connections
+    active_connections[chat_id].remove(websocket)
+    if not active_connections[chat_id]:
+      del active_connections[chat_id]
 
 
-@router.post("/", response_model=APIResponse)
-async def chat(request: ChatRequest, user_id: str = Depends(get_current_user_id)):
-    """
-    Chat endpoint for AI travel planning assistant.
+async def generate_ai_response(messages: List[dict]) -> str:
+  """
+  Generate AI response based on conversation history.
+  Replace this with your actual LLM integration.
+  """
+  # TODO: Replace with actual LLM call (OpenAI, Claude, etc.)
+  # For now, a simple response
 
-    Uses Google Gemini to provide conversational assistance for travel planning.
-    """
-    if not GOOGLE_AI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="AI service is not configured. Please set GOOGLE_AI_API_KEY environment variable.",
-        )
+  # Build conversation context
+  conversation = "\n".join([
+    f"{msg['senderName']}: {msg['content']}"
+    for msg in messages
+    if msg['type'] == 'user'
+  ])
 
-    try:
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        llm = ChatGoogleGenerativeAI(
-            model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY
-        )
-
-        # Build conversation context
-        system_prompt = """You are a helpful AI travel planning assistant for a group travel planning application. 
-Your role is to help users plan their trips by:
-- Answering questions about travel destinations, activities, and planning
-- Providing suggestions for group travel
-- Helping with itinerary planning
-- Answering questions about preferences, budgets, and travel logistics
-- Being friendly, informative, and concise
-
-Keep your responses conversational and helpful. If you don't know something, admit it rather than making things up."""
-
-        # Format conversation history using LangChain message types
-        messages = [SystemMessage(content=system_prompt)]
-
-        # Add history (limit to last 10 messages to avoid token limits)
-        recent_history = request.history[-10:] if len(request.history) > 10 else request.history
-        for msg in recent_history:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if content:
-                if role == "user":
-                    messages.append(HumanMessage(content=content))
-                elif role == "assistant":
-                    messages.append(AIMessage(content=content))
-
-        # Add current message
-        messages.append(HumanMessage(content=request.message))
-
-        # Get response from LLM
-        response = llm.invoke(messages)
-        response_text = response.content if hasattr(response, "content") else str(response)
-
-        return APIResponse(
-            code=0,
-            msg="ok",
-            data={"message": response_text},
-        )
-
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="AI service dependencies are not installed. Please install langchain-google-genai.",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process chat message: {str(e)}",
-        )
+  # Simple mock response - replace with actual LLM
+  return f"Based on your discussion, I recommend starting with destination research. What's your group's budget range and preferred travel dates?"

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
+import { API } from '../../services/api';
 
 interface Message {
   senderId: string;
@@ -36,7 +37,7 @@ export function Chat() {
     if (!tripId) return;
 
     // Connect to WebSocket
-    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:8060'}/ws/chat/${tripId}`;
+    const wsUrl = `${API.chat.chat}/${tripId}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -137,7 +138,7 @@ export function Chat() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4 flex items-center justify-between">

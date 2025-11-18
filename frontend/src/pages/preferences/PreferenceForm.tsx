@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
 import Notification from '../../components/notification/Notification';
-import LocationAutocomplete from '../../components/input/LocationAutocomplete';
+import { API } from '../../services/api';
 
 interface PreferenceFormProps {
   tripId: string;
@@ -33,12 +33,25 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
   const navigate = useNavigate();
   // Ensure we have valid tripId and userId; fall back to localStorage / URL when possible
   const effectiveUserId = userId || JSON.parse(localStorage.getItem('user_info') || '{}').id;
-  const effectiveTripId = tripId || window.location.pathname.split('/')[2];
+  // Robustly extract tripId from URL if not provided via props
+  const effectiveTripId =
+    tripId ||
+    (() => {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      // Expecting /trip/preferences/:tripId or /trip/:tripId/preferences
+      // Prefer the last segment if it's not 'preferences' or 'trip'
+      const last = parts[parts.length - 1];
+      if (last && last !== 'trip' && last !== 'preferences') return last;
+      // Fallback to segment after 'trip'
+      const idx = parts.indexOf('trip');
+      if (idx >= 0 && parts[idx + 1] && parts[idx + 1] !== 'preferences') return parts[idx + 1];
+      // As a last resort return undefined (handled by validations)
+      return undefined as unknown as string;
+    })();
   const [budgetLevel, setBudgetLevel] = useState<number>(2);
   const [selectedVibes, setSelectedVibes] = useState<Vibe[]>([]);
   const [dealBreaker, setDealBreaker] = useState('');
   const [notes, setNotes] = useState('');
-  const [destination, setDestination] = useState('');
   const [availableDates, setAvailableDates] = useState<{ start: string; end: string }[]>([]);
   const [newDateStart, setNewDateStart] = useState('');
   const [newDateEnd, setNewDateEnd] = useState('');
@@ -75,7 +88,7 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
 
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/preferences/`, {
+      const response = await fetch(API.preferences.create, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -83,7 +96,6 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
         body: JSON.stringify({
           trip_id: effectiveTripId,
           user_id: effectiveUserId,
-          destination: destination.trim() || null,
           available_dates: availableDates.map((d) => `${d.start}:${d.end}`),
           budget_level: budgetLevel,
           vibes: selectedVibes.map((v) => String(v)),
@@ -117,7 +129,7 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen py-8 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -126,21 +138,6 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 space-y-8">
-          {/* Destination */}
-          <div>
-            <label className="block text-lg font-bold text-gray-900 mb-3">
-              Where do you want to go? (Optional)
-            </label>
-            <LocationAutocomplete
-              value={destination}
-              onChange={setDestination}
-              placeholder="e.g., Tokyo, Japan"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Start typing to see real location suggestions
-            </p>
-          </div>
-
           {/* Available Dates */}
           <div>
             <label className="block text-lg font-bold text-gray-900 mb-3">

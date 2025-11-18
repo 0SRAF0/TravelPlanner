@@ -10,7 +10,7 @@ from app.router.auth import router as auth_router
 from app.router.trip import router as trip_router
 from app.router.perference import router as preference_router
 from app.router.system import router as system_router
-from app.router.chat import router as chat_router
+from app.router.chatbot import router as chat_router
 from app.router.location import router as location_router
 
 

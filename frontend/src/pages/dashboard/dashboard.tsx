@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
-import CreateTripModal from '../../components/trip/CreateTripModal';
-import TripCodeModal from '../../components/trip/TripCodeModal';
+import CreateTripModal from '../trip/components/CreateTripModal.tsx';
+import TripCodeModal from '../trip/components/TripCodeModal.tsx';
 import Notification from '../../components/notification/Notification';
+import { API } from '../../services/api';
 
 interface Trip {
   trip_id: string;
@@ -36,13 +37,15 @@ const Dashboard = () => {
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
 
   useEffect(() => {
-    fetchUserTrips();
+    fetchuser();
   }, []);
 
-  const fetchUserTrips = async () => {
+  const fetchuser = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/user/${currentUser.id}`);
+      const url = new URL(API.trip.user);
+      url.searchParams.set('user_id', String(currentUser.id));
+      const response = await fetch(url.toString());
       const result = await response.json();
 
       if (result.code === 0) {
@@ -62,7 +65,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/join`, {
+      const response = await fetch(API.trip.join, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -99,7 +102,7 @@ const Dashboard = () => {
   const handleCreateSuccess = (data: { trip_id: string; trip_code: string; trip_name: string }) => {
     setNewTripData(data);
     // Don't show code modal - user is redirected to preferences in CreateTripModal
-    fetchUserTrips(); // Refresh trips list
+    fetchuser(); // Refresh trips list
   };
 
   const handleGoToPreferences = () => {
@@ -128,10 +131,10 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/trips/${tripToDelete}?user_id=${currentUser.id}`,
-        { method: 'DELETE' },
-      );
+      const url = new URL(API.trip.delete);
+      url.searchParams.set('trip_id', tripToDelete);
+      url.searchParams.set('user_id', currentUser.id);
+      const response = await fetch(url.toString(), { method: 'DELETE' });
 
       const data = await response.json();
 
@@ -139,7 +142,7 @@ const Dashboard = () => {
         setToast({ message: 'Trip deleted successfully', type: 'success' });
         setShowDeleteConfirm(false);
         setTripToDelete(null);
-        fetchUserTrips(); // Refresh trips list
+        fetchuser(); // Refresh trips list
       } else {
         setToast({
           message: data.msg || 'Failed to delete trip',

@@ -28,7 +28,6 @@ export default function ActivityList({
 }: ActivityListProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     type?: 'success' | 'error' | 'info' | 'warning';
@@ -47,7 +46,6 @@ export default function ActivityList({
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const data = await activityService.getActivities({
         trip_id: tripId,
@@ -57,7 +55,7 @@ export default function ActivityList({
       });
       setActivities(data);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load activities');
+      setToast({ message: e?.message || 'Failed to load activities', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -141,7 +139,7 @@ export default function ActivityList({
         </button>
       </div>
 
-      {error && <div className="text-left text-danger text-sm mb-2 px-1">{error}</div>}
+      
 
       {/* Scroll container */}
       <div

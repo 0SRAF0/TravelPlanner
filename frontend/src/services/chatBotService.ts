@@ -14,7 +14,7 @@ export interface ChatResponse {
 /**
  * Chat service for communicating with the AI assistant
  */
-export const chatService = {
+export const chatBotService = {
   /**
    * Send a message to the AI chat endpoint
    */
@@ -24,7 +24,7 @@ export const chatService = {
       throw new Error('User not authenticated');
     }
 
-    const response = await fetch(API.chat.send, {
+    const response = await fetch(API.chatBot.send, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -5,10 +5,12 @@ import { SignIn } from './pages/signIn/SignIn.tsx';
 import Dashboard from './pages/dashboard/dashboard.tsx';
 import { GoogleOAuthCallback } from './pages/signIn/components/GoogleOAuthCallback.tsx';
 import { Home } from './pages/home/home.tsx';
-import TripDetail from './pages/trip/TripDetail.tsx';
+import Trip from './pages/trip/Trip.tsx';
 import PreferenceForm from './pages/preferences/PreferenceForm.tsx';
 import { Chat } from './pages/chat/Chat.tsx';
 import { authService } from './services/authService.ts';
+import { useEffect, useState } from "react";
+import { ChatButton } from "./components/chat";
 
 // Protected Route Component
 const ProtectedHome = () => {
@@ -30,6 +32,27 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(authService.isAuthenticated());
+
+  useEffect(() => {
+    const checkAuth = () => {
+      setIsAuthenticated(authService.isAuthenticated());
+    };
+
+    // Check on mount
+    checkAuth();
+
+    // Listen for storage changes (login/logout in other tabs or same tab)
+    window.addEventListener('storage', checkAuth);
+    // Also listen for custom events
+    window.addEventListener('auth-change', checkAuth);
+
+    return () => {
+      window.removeEventListener('storage', checkAuth);
+      window.removeEventListener('auth-change', checkAuth);
+    };
+  }, []);
+
   return (
     <Router>
       <div className="App">
@@ -50,23 +73,23 @@ function App() {
             path="/trip/:tripId"
             element={
               <ProtectedRoute>
-                <TripDetail />
+                <Trip />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/trip/:tripId/preferences"
+            path="/trip/preferences/:tripId"
             element={
               <ProtectedRoute>
                 <PreferenceForm
-                  tripId={window.location.pathname.split('/')[2]}
+                  tripId={window.location.pathname.split('/')[3]}
                   userId={JSON.parse(localStorage.getItem('user_info') || '{}').id}
                 />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/trip/:tripId/chat"
+            path="/trip/chat/:tripId"
             element={
               <ProtectedRoute>
                 <Chat />
@@ -74,6 +97,7 @@ function App() {
             }
           />
         </Routes>
+        {isAuthenticated && <ChatButton />}
       </div>
     </Router>
   );

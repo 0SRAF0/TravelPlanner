@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import Modal from '../modal/Modal.tsx';
-import Button from '../button/Button.tsx';
+import Modal from '../../../components/modal/Modal.tsx';
+import Button from '../../../components/button/Button.tsx';
 
 interface TripCodeModalProps {
   isOpen: boolean;

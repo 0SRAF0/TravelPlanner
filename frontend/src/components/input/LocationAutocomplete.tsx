@@ -47,9 +47,10 @@ export default function LocationAutocomplete({
 
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/locations/autocomplete?input=${encodeURIComponent(input)}`,
-      );
+      const { API } = await import('../../services/api');
+      const url = new URL(API.locations.autocomplete);
+      url.searchParams.set('input', input);
+      const response = await fetch(url.toString());
 
       if (!response.ok) {
         throw new Error('Failed to fetch suggestions');

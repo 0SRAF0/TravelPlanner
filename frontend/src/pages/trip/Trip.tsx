@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
 import Notification from '../../components/notification/Notification';
+import { API } from '../../services/api';
+import ConfirmProceedModal from './components/ConfirmProceedModal.tsx';
 
 interface Member {
   user_id: string;
@@ -24,7 +26,7 @@ interface TripData {
   creator_id: string;
 }
 
-export default function TripDetail() {
+export default function Trip() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
   const [trip, setTrip] = useState<TripData | null>(null);
@@ -35,6 +37,8 @@ export default function TripDetail() {
     type?: 'success' | 'error' | 'warning';
   } | null>(null);
   const [processingAllIn, setProcessingAllIn] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingMembers, setPendingMembers] = useState<{ name: string; picture?: string }[]>([]);
 
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
   const hasSubmitted = trip?.members_with_preferences.includes(currentUser.id) || false;
@@ -55,7 +59,9 @@ export default function TripDetail() {
     setError(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/${tripId}`);
+      const url = new URL(API.trip.get);
+      url.searchParams.set('trip_id', String(tripId));
+      const response = await fetch(url.toString());
       const result = await response.json();
 
       if (result.code === 0 && result.data) {
@@ -71,7 +77,7 @@ export default function TripDetail() {
   };
 
   const handleSetPreferences = () => {
-    navigate(`/trip/${tripId}/preferences`);
+    navigate(`/trip/preferences/${tripId}`);
   };
 
   const handleCopyCode = () => {
@@ -81,33 +87,20 @@ export default function TripDetail() {
     }
   };
 
-  const handleAllIn = async () => {
-    if (!trip) return;
-
-    const notSubmitted = trip.member_details.filter((m) => !m.has_submitted_preferences);
-
-    if (notSubmitted.length > 0) {
-      const names = notSubmitted.map((m) => m.name).join(', ');
-      const confirmed = window.confirm(
-        `Not everyone has submitted preferences yet:\n\n${names}\n\nProceed anyway? The AI will work with available preferences.`,
-      );
-
-      if (!confirmed) return;
-    }
-
+  const startAllIn = async () => {
     setProcessingAllIn(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/trips/${tripId}/all-in`, {
+      const response = await fetch(API.trip.allIn, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trip_id: tripId }),
       });
 
       const result = await response.json();
 
       if (result.code === 0) {
-        // Navigate to chat immediately - orchestrator runs in background
-        navigate(`/trip/${tripId}/chat`);
+        navigate(`/trip/chat/${tripId}`);
       } else {
-        // Show error
         setToast({
           message: result.msg || 'Failed to start planning',
           type: 'error',
@@ -121,6 +114,20 @@ export default function TripDetail() {
     } finally {
       setProcessingAllIn(false);
     }
+  };
+
+  const handleAllIn = async () => {
+    if (!trip) return;
+
+    const notSubmitted = trip.member_details.filter((m) => !m.has_submitted_preferences);
+
+    if (notSubmitted.length > 0) {
+      setPendingMembers(notSubmitted.map((m) => ({ name: m.name, picture: m.picture })));
+      setShowConfirm(true);
+      return;
+    }
+
+    await startAllIn();
   };
   if (loading) {
     return (
@@ -151,7 +158,7 @@ export default function TripDetail() {
   const canTriggerAllIn = trip.members_with_preferences.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
@@ -238,11 +245,13 @@ export default function TripDetail() {
                       : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
                   </p>
                 </div>
-                <Button
-                  text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
-                  onClick={handleAllIn}
-                  size="lg"
-                />
+                {trip.status !== 'planning' && (
+                  <Button
+                    text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
+                    onClick={handleAllIn}
+                    size="lg"
+                  />
+                )}
               </div>
             </div>
           )}
@@ -250,7 +259,7 @@ export default function TripDetail() {
 
         {/* Activities Section */}
         {trip.status !== 'collecting_preferences' && (
-          <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Suggested Activities</h2>
             <ActivityList
               tripId={trip.trip_id}
@@ -268,6 +277,16 @@ export default function TripDetail() {
         message={toast?.message || ''}
         type={toast?.type}
         onClose={() => setToast(null)}
+      />
+      <ConfirmProceedModal
+        isOpen={showConfirm}
+        pendingMembers={pendingMembers}
+        isProcessing={processingAllIn}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={async () => {
+          setShowConfirm(false);
+          await startAllIn();
+        }}
       />
     </div>
   );
