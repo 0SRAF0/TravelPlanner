@@ -5,6 +5,7 @@ import Button from '../../../components/button';
 import Input from '../../../components/input';
 import Notification from '../../../components/notification/Notification.tsx';
 import { API } from '../../../services/api.ts';
+import LocationAutocomplete from '../../../components/input/LocationAutocomplete';
 
 interface CreateTripModalProps {
   isOpen: boolean;
@@ -15,12 +16,17 @@ interface CreateTripModalProps {
 export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTripModalProps) {
   const navigate = useNavigate();
   const [tripName, setTripName] = useState('');
+  const [destination, setDestination] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!tripName.trim()) {
       setError('Please enter a trip name');
+      return;
+    }
+    if (!destination.trim()) {
+      setError('Please enter a destination');
       return;
     }
 
@@ -38,6 +44,7 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
         body: JSON.stringify({
           trip_name: tripName,
           creator_id: user.id,
+          destination: destination.trim(),
         }),
       });
 
@@ -50,6 +57,7 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
       if (result.code === 0 && result.data) {
         onSuccess?.(result.data);
         setTripName('');
+        setDestination('');
         onClose();
 
         // Redirect to preferences page
@@ -74,7 +82,7 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Trip Name *</label>
+            <label className="block text-sm text-gray-700 font-bold mb-2">Trip Name *</label>
             <Input
               type="text"
               placeholder="e.g., Summer Japan Trip"
@@ -82,6 +90,17 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
               onChange={(e) => setTripName(e.target.value)}
               disabled={loading}
             />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Where do you want to go?
+            </label>
+            <LocationAutocomplete
+              value={destination}
+              onChange={setDestination}
+              placeholder="e.g., Tokyo, Japan"
+            />
+            <p className="text-sm text-gray-600 mt-2">Start typing to see real location suggestions</p>
           </div>
           <p className="text-sm text-gray-600">
             You'll set your travel preferences on the next step.

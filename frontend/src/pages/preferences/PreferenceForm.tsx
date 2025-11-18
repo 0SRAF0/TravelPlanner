@@ -4,7 +4,6 @@ import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
 import Notification from '../../components/notification/Notification';
 import { API } from '../../services/api';
-import LocationAutocomplete from '../../components/input/LocationAutocomplete';
 
 interface PreferenceFormProps {
   tripId: string;
@@ -53,7 +52,6 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
   const [selectedVibes, setSelectedVibes] = useState<Vibe[]>([]);
   const [dealBreaker, setDealBreaker] = useState('');
   const [notes, setNotes] = useState('');
-  const [destination, setDestination] = useState('');
   const [availableDates, setAvailableDates] = useState<{ start: string; end: string }[]>([]);
   const [newDateStart, setNewDateStart] = useState('');
   const [newDateEnd, setNewDateEnd] = useState('');
@@ -98,7 +96,6 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
         body: JSON.stringify({
           trip_id: effectiveTripId,
           user_id: effectiveUserId,
-          destination: destination.trim() || null,
           available_dates: availableDates.map((d) => `${d.start}:${d.end}`),
           budget_level: budgetLevel,
           vibes: selectedVibes.map((v) => String(v)),
@@ -141,21 +138,6 @@ export default function PreferenceForm({ tripId, userId, onComplete }: Preferenc
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 space-y-8">
-          {/* Destination */}
-          <div>
-            <label className="block text-lg font-bold text-gray-900 mb-3">
-              Where do you want to go? (Optional)
-            </label>
-            <LocationAutocomplete
-              value={destination}
-              onChange={setDestination}
-              placeholder="e.g., Tokyo, Japan"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Start typing to see real location suggestions
-            </p>
-          </div>
-
           {/* Available Dates */}
           <div>
             <label className="block text-lg font-bold text-gray-900 mb-3">
