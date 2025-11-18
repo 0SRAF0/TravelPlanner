@@ -103,13 +103,47 @@ async def run_orchestrator_background(
         # Update status: itinerary planning
         await broadcast_agent_status("Itinerary Agent", "running", "Creating day-by-day itinerary")
 
-        result = run_orchestrator_agent(initial_state)
+        result = await run_orchestrator_agent(initial_state)
+
+        # Persist activities produced by orchestrator (if any)
+        try:
+            agent_data_out = (result or {}).get("agent_data", {}) or {}
+            activities = agent_data_out.get("activity_catalog", []) or []
+            if activities:
+                col = get_activities_collection()
+                await col.delete_many({"trip_id": trip_id})
+                docs = []
+                for a in activities:
+                    try:
+                        doc = Activity(
+                            trip_id=str(a.get("trip_id") or trip_id),
+                            name=str(a.get("name", "")),
+                            category=str(a.get("category", "Other")),
+                            rough_cost=a.get("rough_cost"),
+                            duration_min=a.get("duration_min"),
+                            lat=a.get("lat"),
+                            lng=a.get("lng"),
+                            tags=list(a.get("tags") or []),
+                            fits=list(a.get("fits") or []),
+                            score=float(a.get("score") or 0.0),
+                            rationale=str(a.get("rationale") or ""),
+                        )
+                        docs.append(doc.model_dump())
+                    except Exception as e:
+                        print(f"[orchestrator_background] Skipping invalid activity record: {e}")
+                if docs:
+                    res = await col.insert_many(docs)
+                    print(
+                        f"[orchestrator_background] Saved {len(res.inserted_ids)} activities for trip={trip_id}"
+                    )
+        except Exception as e:
+            print(f"[orchestrator_background] Warning: failed to save activities after orchestrator: {e}")
 
         # Update status: completed
         await broadcast_agent_status("Orchestrator", "completed", "Trip planning finished")
 
         # Send completion message
-        success_msg = f"✅ Trip planning complete!\nSteps taken: {len(result.get('steps', []))}\nStatus: {result.get('reason', 'Done')}"
+        success_msg = f"✅ Trip planning complete!\nSteps taken: {result.get('steps', 0)}\nStatus: {result.get('reason', 'Done')}"
         await messages_collection.insert_one(
             {
                 "chatId": trip_id,

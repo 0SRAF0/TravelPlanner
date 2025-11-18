@@ -9,10 +9,13 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, StateGraph
+from datetime import datetime
+from bson import ObjectId
 
 from app.agents.agent_state import AgentState
 from app.agents.tools import get_all_trip_preferences
 from app.models.preference import Preference
+from app.db.database import get_database
 
 AGENT_LABEL = "preference"
 
@@ -208,6 +211,8 @@ class PreferenceAgent:
 
         # LLM (optional, lazy-loaded)
         self._llm = None
+        # Build LangGraph app for this agent
+        self.app = self._build_graph()
 
     @property
     def llm(self):
@@ -300,7 +305,7 @@ class PreferenceAgent:
 
     # ========== LangGraph Nodes ==========
 
-    def _fetch_and_process(self, state: AgentState) -> AgentState:
+    async def _fetch_and_process(self, state: AgentState) -> AgentState:
         """
         Fetch all preferences for trip_id and create embeddings.
         This is the main node that does all the work.
@@ -316,8 +321,8 @@ class PreferenceAgent:
         print(f"[preference._fetch_and_process] Fetching preferences for trip: {trip_id}")
 
         try:
-            # Fetch preferences from database
-            result = get_all_trip_preferences.invoke({"trip_id": trip_id})
+            # Fetch preferences from database (async tool)
+            result = await get_all_trip_preferences.ainvoke({"trip_id": trip_id})
 
             if "_error" in result:
                 return {
@@ -397,9 +402,52 @@ class PreferenceAgent:
                 "coverage": aggregate.coverage,
             }
 
+            # Preserve existing agent_data and optionally set destination if missing
+            agent_data_out = dict(state.get("agent_data", {}) or {})
+            agent_data_out["preferences_summary"] = preferences_summary
+
+            # If destination is missing, suggest and persist a fallback based on top vibe
+            current_destination = str(agent_data_out.get("destination") or "").strip()
+            if not current_destination:
+                # Determine top vibe
+                top_vibe = None
+                if aggregate.soft_mean:
+                    top_vibe = max(aggregate.soft_mean.items(), key=lambda kv: kv[1])[0]
+                # Simple mapping from top vibe to a reasonable default destination
+                vibe_to_destination = {
+                    "adventure": "Queenstown, New Zealand",
+                    "nature": "Banff, Canada",
+                    "food": "Tokyo, Japan",
+                    "culture": "Rome, Italy",
+                    "relax": "Bali, Indonesia",
+                    "nightlife": "Las Vegas, USA",
+                }
+                suggested_destination = vibe_to_destination.get(
+                    (top_vibe or "").lower(), "San Francisco, USA"
+                )
+                agent_data_out["destination"] = suggested_destination
+                print(
+                    f"[preference] No destination set; suggesting '{suggested_destination}'"
+                    + (f" based on top vibe '{top_vibe}'" if top_vibe else "")
+                )
+                # Best-effort: persist to trips collection
+                try:
+                    db = get_database()
+                    trips = db.trips
+                    try:
+                        await trips.update_one(
+                            {"_id": ObjectId(trip_id)},
+                            {"$set": {"destination": suggested_destination, "updated_at": datetime.utcnow()}},
+                        )
+                    except Exception:
+                        # If trip_id is not a valid ObjectId, skip persistence
+                        pass
+                except Exception as e:
+                    print(f"[preference] Warning: failed to persist suggested destination: {e}")
+
             return {
                 "trip_id": trip_id,
-                "agent_data": {"preferences_summary": preferences_summary},
+                "agent_data": agent_data_out,
                 "messages": [AIMessage(content=summary_msg)],
                 "done": True,
             }

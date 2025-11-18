@@ -259,7 +259,7 @@ export default function Trip() {
 
         {/* Activities Section */}
         {trip.status !== 'collecting_preferences' && (
-          <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Suggested Activities</h2>
             <ActivityList
               tripId={trip.trip_id}
