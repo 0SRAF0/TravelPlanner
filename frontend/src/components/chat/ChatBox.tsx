@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import Input from '../input/Input';
 import { chatBotService, type ChatMessage } from '../../services/chatBotService.ts';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faXmark, faPaperPlane } from '@fortawesome/free-solid-svg-icons';
 
 interface ChatBoxProps {
   isOpen: boolean;
@@ -90,11 +93,10 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-20 right-6 w-96 h-[600px] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col z-50">
+    <div className="fixed bottom-20 right-6 w-96 h-[600px] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col z-50 mb-4">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-lg">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-accent to-primary rounded-t-3xl">
         <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-green-400 rounded-full"></div>
           <h3 className="text-white font-semibold">AI Travel Assistant</h3>
         </div>
         <button
@@ -102,14 +104,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
           className="text-white hover:bg-blue-700 rounded-full p-1 transition-colors"
           aria-label="Close chat"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <FontAwesomeIcon icon={faXmark} className="w-5 h-5" />
         </button>
       </div>
 
@@ -121,9 +116,9 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 text-left ${
+              className={`max-w-[80%] rounded-2xl px-4 py-2 text-left ${
                 message.role === 'user'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-primary text-white'
                   : 'bg-white text-gray-800 border border-gray-200'
               }`}
             >
@@ -155,31 +150,33 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-200 bg-white rounded-b-lg">
-        <div className="flex space-x-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-          />
+      <div className="p-4 rounded-b-lg">
+        <div className="flex space-x-2 items-center">
+          <div className="flex-1">
+            <Input
+              type="text"
+              placeholder="Type your message..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isLoading}
+              className="m-0 w-full"
+            />
+          </div>
           <button
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            aria-label="Send message"
+            title="Send"
+            className="transition-colors mx-2 disabled:cursor-not-allowed text-xl"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-              />
-            </svg>
+            <FontAwesomeIcon
+              icon={faPaperPlane}
+              className={`w-5 h-5 ${
+                isLoading || !input.trim() ? 'opacity-50' : 'hover:opacity-90'
+              }`}
+              style={{ color: 'var(--color-primary)' }}
+            />
           </button>
         </div>
       </div>

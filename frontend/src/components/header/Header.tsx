@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import Button from '../button';
 import { authService, type UserInfo } from '../../services/authService.ts';
 import LogoFull from '../../../assets/full-logo.svg';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
 const maskEmail = (email: string, minLocalLength: number = 12): string => {
   if (!email) return '';
@@ -112,19 +114,10 @@ export default function Header() {
               <span className="text-sm font-medium text-gray-700">
                 {user.given_name || user.name}
               </span>
-              <svg
+              <FontAwesomeIcon
+                icon={faChevronDown}
                 className={`w-4 h-4 text-gray-500 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
+              />
             </button>
 
             {/* Dropdown Menu */}

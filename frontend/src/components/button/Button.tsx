@@ -5,6 +5,7 @@ interface ButtonProps {
   onClick?: () => void;
   size?: 'base' | 'lg' | string;
   bold?: boolean;
+  disabled?: boolean;
 }
 
 export default function Button({
@@ -14,6 +15,7 @@ export default function Button({
   rounded,
   size = 'base',
   bold = true,
+  disabled = false,
 }: ButtonProps) {
   const sizeClasses = (() => {
     switch (size) {
@@ -29,10 +31,16 @@ export default function Button({
   const weightClass = bold ? 'font-bold' : 'font-normal';
   const baseClasses = `${sizeClasses} ${weightClass} text-white`;
   const roundedClasses = rounded ? 'rounded-full' : size === 'lg' ? 'rounded-2xl' : 'rounded-xl';
-  const className = `${baseClasses} ${roundedClasses}`.trim();
+  const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
+  const className = `${baseClasses} ${roundedClasses} ${disabledClasses}`.trim();
 
   return (
-    <button className={className} style={{ backgroundColor: color }} onClick={onClick}>
+    <button
+      className={className}
+      style={{ backgroundColor: color }}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {text}
     </button>
   );

@@ -255,7 +255,7 @@ const Dashboard = () => {
             <h2 className="text-2xl font-bold text-gray-900">Your Trips</h2>
             {loading ? (
               <div className="text-center py-12">
-                <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+                <div className="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mx-auto"></div>
               </div>
             ) : trips.length === 0 ? (
               <div className="text-center py-16 text-gray-500">
