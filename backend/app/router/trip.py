@@ -111,6 +111,7 @@ async def run_orchestrator_background(
             "destination": destination,
             "trip_duration_days": trip_duration_days,
         },
+        "broadcast_callback": broadcast_agent_status,  # Pass broadcast function to agents
     }
 
     try:
@@ -153,14 +154,7 @@ async def run_orchestrator_background(
             "Destination Research Agent", "completed", f"Generated {activity_count} activity suggestions", progress={"current": 4, "total": 4}
         )
 
-        # Update status: itinerary planning
-        await broadcast_agent_status("Itinerary Agent", "running", "Loading activity catalog", progress={"current": 1, "total": 3})
-        await asyncio.sleep(0.5)
-        
-        await broadcast_agent_status("Itinerary Agent", "running", f"Matching {activity_count} activities to preferences", progress={"current": 2, "total": 3})
-        await asyncio.sleep(0.5)
-        
-        await broadcast_agent_status("Itinerary Agent", "completed", f"Created {trip_duration_days}-day itinerary", progress={"current": 3, "total": 3})
+        # Note: Itinerary Agent will broadcast its own status updates via broadcast_callback
 
         # Persist activities produced by orchestrator (if any)
         try:

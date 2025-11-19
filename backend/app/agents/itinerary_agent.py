@@ -133,19 +133,28 @@ class ItineraryAgent:
         self.app = self._build_graph()
 
     # ---- Node ----
-    def _build_itinerary(self, state: AgentState) -> AgentState:
+    async def _build_itinerary(self, state: AgentState) -> AgentState:
         t0 = time.time()
         agent_data = dict(state.get("agent_data", {}) or {})
+        
+        # Get broadcast callback if available
+        broadcast = state.get("broadcast_callback")
 
         print("\n" + "=" * 80)
         print("  ITINERARY AGENT START")
         print("=" * 80)
         print(f"[PERF] Start timestamp: {time.time()}")
+        
+        # Broadcast starting status
+        if broadcast:
+            await broadcast("Itinerary Agent", "running", "Loading activity catalog", progress={"current": 1, "total": 3})
 
         hints = state.get("hints") or agent_data.get("hints") or {}
         force = bool((hints or {}).get("force", False))
         if agent_data.get("itinerary") and not force:
             print(f"[DEBUG] Itinerary already exists, short-circuiting")
+            if broadcast:
+                await broadcast("Itinerary Agent", "completed", "Itinerary already exists", progress={"current": 3, "total": 3})
             return state
 
         # Flexible input locations: top-level or agent_data
@@ -224,6 +233,11 @@ class ItineraryAgent:
             state["agent_data"] = agent_data
             return state
 
+        # Broadcast matching status
+        if broadcast:
+            activity_count = len(input_data.activity_catalog) if input_data.activity_catalog else 0
+            await broadcast("Itinerary Agent", "running", f"Matching {activity_count} activities to preferences", progress={"current": 2, "total": 3})
+        
         # Prepare LLM call
         payload_start = time.time()
         print(f"[PROCESSING] Preparing itinerary generation payload...")
@@ -350,6 +364,10 @@ class ItineraryAgent:
         
         total_latency = (time.time() - t0) * 1000
         print(f"[PERF] Total itinerary agent latency: {total_latency:.2f}ms ({total_latency/1000:.2f}s)")
+        
+        # Broadcast completion status
+        if broadcast:
+            await broadcast("Itinerary Agent", "completed", f"Created {trip_duration_days}-day itinerary with {total_activities} activities", progress={"current": 3, "total": 3})
 
         out = ItineraryOut(
             itinerary=result.itinerary or [],

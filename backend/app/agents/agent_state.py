@@ -54,3 +54,6 @@ class AgentState(TypedDict, total=False):
     # ========== Generic Storage (ALL agents use these) ==========
     agent_data: dict[str, Any]  # All agent outputs
     agent_scratch: dict[str, Any]  # All agent working memory
+    
+    # ========== WebSocket Broadcast Callback ==========
+    broadcast_callback: Any  # Optional async callback for status updates
