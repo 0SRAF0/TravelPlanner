@@ -33,6 +33,34 @@ export function Chat() {
 
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
 
+  // Simple, safe markdown renderer for basic bold/italic using asterisks
+  // - Escapes HTML to avoid XSS
+  // - Supports **bold** and *italic* (non-greedy)
+  const escapeHtml = (unsafe: string) =>
+    unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  const renderMessageContent = (text: string) => {
+    if (!text) return '';
+    // Escape first
+    let out = escapeHtml(text);
+
+    // Replace bold (**text**)
+    out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Replace italic (*text*) but avoid interfering with bold already replaced
+    out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Preserve line breaks
+    out = out.replace(/\r?\n/g, '<br/>');
+
+    return out;
+  };
+
   useEffect(() => {
     if (!tripId) return;
 
@@ -215,14 +243,17 @@ export function Chat() {
                     <div
                       className={`max-w-[70%] rounded-lg px-4 py-2 ${
                         msg.type === 'ai'
-                          ? 'bg-blue-100 border border-blue-300'
+                          ? 'bg-blue-100 border border-blue-300 text-left'
                           : msg.senderId === currentUser.id
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-gray-200 text-gray-900'
+                            ? 'bg-indigo-600 text-white text-left'
+                            : 'bg-gray-200 text-gray-900 text-left'
                       }`}
                     >
                       <p className="text-xs font-semibold mb-1 opacity-75">{msg.senderName}</p>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      <div
+                        className="text-sm whitespace-pre-wrap text-left"
+                        dangerouslySetInnerHTML={{ __html: renderMessageContent(msg.content) }}
+                      />
                       <p className="text-xs mt-1 opacity-60">
                         {new Date(msg.timestamp).toLocaleTimeString()}
                       </p>
