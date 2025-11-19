@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Activity } from '../../types/activity';
 import ActivityCard from './ActivityCard';
+import { API } from '../../services/api';
 import { activityService } from '../../services/activityService';
 import Notification from '../notification/Notification';
 import { authService } from '../../services/authService';
@@ -27,6 +28,7 @@ export default function ActivityList({
   modalMaxWidth = '32vw',
 }: ActivityListProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down'>>({});
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -54,6 +56,26 @@ export default function ActivityList({
         limit,
       });
       setActivities(data);
+      // Try to fetch current user's saved votes for this trip so we can initialize UI
+      try {
+        const user = authService.getUser();
+        if (user) {
+          const url = new URL(API.preferences.user);
+          url.searchParams.set('user_id', user.id);
+          url.searchParams.set('trip_id', tripId);
+          const resp = await fetch(url.toString());
+          if (resp.ok) {
+            const json = await resp.json();
+            if (json?.code === 0 && json?.data) {
+              const votes = (json.data.votes as Record<string, 'up' | 'down'>) || {};
+              setUserVotes(votes);
+            }
+          }
+        }
+      } catch (e) {
+        // Non-fatal: if we can't fetch votes, just leave UI uninitialized
+        console.warn('Failed to load user votes:', e);
+      }
     } catch (e: any) {
       setToast({ message: e?.message || 'Failed to load activities', type: 'error' });
     } finally {
@@ -181,12 +203,13 @@ export default function ActivityList({
                   className="shrink-0"
                   style={{ ...cardStyle, height: `${cardHeightPx}px` }}
                 >
-                  <ActivityCard
-                    activity={a}
-                    onVote={onVote}
-                    className="h-full"
-                    modalMaxWidth={modalMaxWidth}
-                  />
+                      <ActivityCard
+                        activity={a}
+                        onVote={onVote}
+                        initialVote={(userVotes[a.name] as 'up' | 'down') ?? null}
+                        className="h-full"
+                        modalMaxWidth={modalMaxWidth}
+                      />
                 </div>
               ))}
         </div>

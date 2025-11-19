@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Activity } from '../../types/activity';
 import Modal from '../modal/Modal';
 import GoogleMapEmbed from '../map/GoogleMapEmbed';
@@ -10,6 +10,7 @@ const COLOR_SETS: ColorSet[] = [{ primary: '#000', secondary: '#FFF' }];
 export interface ActivityCardProps {
   activity: Activity;
   onVote?: (activity: Activity, vote: 'up' | 'down' | 'remove') => Promise<void> | void;
+  initialVote?: 'up' | 'down' | null;
   className?: string;
   modalMaxWidth?: string; // Control detail modal width (e.g., "800px", "90vw")
 }
@@ -49,11 +50,16 @@ function Avatar({ label, bg, color }: { label: string; bg: string; color: string
 export default function ActivityCard({
   activity,
   onVote,
+  initialVote = null,
   className,
   modalMaxWidth = '672px',
 }: ActivityCardProps) {
   const [showModal, setShowModal] = useState(false);
-  const [lastVote, setLastVote] = useState<'up' | 'down' | null>(null);
+  const [lastVote, setLastVote] = useState<'up' | 'down' | null>(initialVote ?? null);
+  // Keep internal state in sync if parent provides a different initialVote later
+  useEffect(() => {
+    setLastVote(initialVote ?? null);
+  }, [initialVote]);
   const upActive = lastVote === 'up';
   const downActive = lastVote === 'down';
 
