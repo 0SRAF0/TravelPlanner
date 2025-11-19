@@ -80,6 +80,34 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
           context_lines.append(f"Trip: {trip.get('trip_name', 'N/A')}, Destination: {trip.get('destination', 'N/A')}")
         if user_pref:
           context_lines.append(f"Preferences: {user_pref.get('preferences', user_pref)}")
+
+        # --- Aggregate votes for this trip and include a short summary in context ---
+        try:
+          votes_cursor = db.votes.find({"trip_id": trip_id})
+          votes_list = await votes_cursor.to_list(length=None)
+          if votes_list:
+            tally = {}
+            for v in votes_list:
+              name = v.get("activity_name")
+              if not name:
+                continue
+              if name not in tally:
+                tally[name] = {"up": 0, "down": 0}
+              if v.get("vote") == "up":
+                tally[name]["up"] += 1
+              else:
+                tally[name]["down"] += 1
+
+            # Build a compact votes summary: Activity (+ups/-downs), limit to top 5 by total votes
+            summary_items = []
+            sorted_items = sorted(tally.items(), key=lambda kv: (kv[1]["up"] + kv[1]["down"]), reverse=True)
+            for name, counts in sorted_items[:5]:
+              summary_items.append(f"{name} (+{counts['up']}/-{counts['down']})")
+
+            if summary_items:
+              context_lines.append(f"Votes summary: {', '.join(summary_items)}")
+        except Exception as e:
+          print(f"Warning: failed to aggregate votes for context: {e}")
         context = " | ".join(context_lines)
 
         # Generate AI response with context

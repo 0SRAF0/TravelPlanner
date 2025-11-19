@@ -9,7 +9,7 @@ const COLOR_SETS: ColorSet[] = [{ primary: '#000', secondary: '#FFF' }];
 
 export interface ActivityCardProps {
   activity: Activity;
-  onVote?: (activity: Activity, vote: 'up' | 'down') => Promise<void> | void;
+  onVote?: (activity: Activity, vote: 'up' | 'down' | 'remove') => Promise<void> | void;
   className?: string;
   modalMaxWidth?: string; // Control detail modal width (e.g., "800px", "90vw")
 }
@@ -54,6 +54,8 @@ export default function ActivityCard({
 }: ActivityCardProps) {
   const [showModal, setShowModal] = useState(false);
   const [lastVote, setLastVote] = useState<'up' | 'down' | null>(null);
+  const upActive = lastVote === 'up';
+  const downActive = lastVote === 'down';
 
   const colorSet = useMemo(() => {
     const randomIdx = Math.floor(Math.random() * COLOR_SETS.length);
@@ -61,6 +63,20 @@ export default function ActivityCard({
   }, []);
 
   const handleVote = async (vote: 'up' | 'down') => {
+    // Toggle: if user clicks the same vote again, undo it.
+    if (lastVote === vote) {
+      // optimistic UI
+      setLastVote(null);
+      try {
+        await onVote?.(activity, 'remove' as any);
+      } catch {
+        // revert if backend fails
+        setLastVote(vote);
+      }
+      return;
+    }
+
+    // New vote
     setLastVote(vote);
     try {
       await onVote?.(activity, vote);
@@ -91,28 +107,30 @@ export default function ActivityCard({
           <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
             <button
               aria-label="Thumbs up"
+              aria-pressed={upActive}
               onClick={() => handleVote('up')}
               className={`w-12 h-12 rounded-xl text-lg font-bold border-2 transition-all flex items-center justify-center ${
-                lastVote === 'up' ? 'scale-105 shadow-lg' : 'hover:scale-105'
+                upActive ? 'scale-105 shadow-lg' : 'hover:scale-105'
               }`}
               style={{
-                backgroundColor: colorSet.secondary,
-                color: colorSet.primary,
-                borderColor: colorSet.primary,
+                backgroundColor: upActive ? 'var(--color-primary)' : colorSet.secondary,
+                color: upActive ? '#fff' : colorSet.primary,
+                borderColor: upActive ? 'var(--color-accent)' : colorSet.primary,
               }}
             >
               👍
             </button>
             <button
               aria-label="Thumbs down"
+              aria-pressed={downActive}
               onClick={() => handleVote('down')}
               className={`w-12 h-12 rounded-xl text-lg font-bold border-2 transition-all flex items-center justify-center ${
-                lastVote === 'down' ? 'scale-105 shadow-lg' : 'hover:scale-105'
+                downActive ? 'scale-105 shadow-lg' : 'hover:scale-105'
               }`}
               style={{
-                backgroundColor: colorSet.secondary,
-                color: colorSet.primary,
-                borderColor: colorSet.primary,
+                backgroundColor: downActive ? '#ef4444' : colorSet.secondary,
+                color: downActive ? '#fff' : colorSet.primary,
+                borderColor: downActive ? '#b91c1c' : colorSet.primary,
               }}
             >
               👎
@@ -240,10 +258,11 @@ export default function ActivityCard({
               className={`w-14 h-14 rounded-xl text-2xl font-bold border-2 transition-all flex items-center justify-center ${
                 lastVote === 'up' ? 'scale-105 shadow-lg' : 'hover:scale-105'
               }`}
+              aria-pressed={upActive}
               style={{
-                backgroundColor: colorSet.secondary,
-                color: colorSet.primary,
-                borderColor: colorSet.primary,
+                backgroundColor: upActive ? 'var(--color-primary)' : colorSet.secondary,
+                color: upActive ? '#fff' : colorSet.primary,
+                borderColor: upActive ? 'var(--color-accent)' : colorSet.primary,
               }}
             >
               👍
@@ -253,10 +272,11 @@ export default function ActivityCard({
               className={`w-14 h-14 rounded-xl text-2xl font-bold border-2 transition-all flex items-center justify-center ${
                 lastVote === 'down' ? 'scale-105 shadow-lg' : 'hover:scale-105'
               }`}
+              aria-pressed={downActive}
               style={{
-                backgroundColor: colorSet.secondary,
-                color: colorSet.primary,
-                borderColor: colorSet.primary,
+                backgroundColor: downActive ? '#ef4444' : colorSet.secondary,
+                color: downActive ? '#fff' : colorSet.primary,
+                borderColor: downActive ? '#b91c1c' : colorSet.primary,
               }}
             >
               👎

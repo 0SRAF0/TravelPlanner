@@ -48,4 +48,20 @@ export const activityService = {
     }
     return response.json();
   },
+  async unvote(body: { trip_id: string; activity_name: string; user_id: string }) {
+    const token = authService.getToken?.();
+    const response = await fetch(API.activities.vote, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(text || 'Failed to remove vote');
+    }
+    return response.json();
+  },
 };

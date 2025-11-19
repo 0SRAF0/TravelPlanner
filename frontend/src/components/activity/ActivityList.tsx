@@ -104,20 +104,25 @@ export default function ActivityList({
     isDraggingRef.current = false;
   };
 
-  const onVote = async (a: Activity, vote: 'up' | 'down') => {
+  const onVote = async (a: Activity, vote: 'up' | 'down' | 'remove') => {
     const user = authService.getUser();
     if (!user) {
       setToast({ message: 'Please sign in to vote', type: 'warning' });
       return;
     }
     try {
-      await activityService.vote({
-        trip_id: a.trip_id,
-        activity_name: a.name,
-        user_id: user.id,
-        vote,
-      });
-      setToast({ message: vote === 'up' ? 'Voted up' : 'Voted down', type: 'success' });
+      if (vote === 'remove') {
+        await activityService.unvote({ trip_id: a.trip_id, activity_name: a.name, user_id: user.id });
+        setToast({ message: 'Vote removed', type: 'success' });
+      } else {
+        await activityService.vote({
+          trip_id: a.trip_id,
+          activity_name: a.name,
+          user_id: user.id,
+          vote,
+        });
+        setToast({ message: vote === 'up' ? 'Voted up' : 'Voted down', type: 'success' });
+      }
     } catch (e: any) {
       setToast({ message: e?.message || 'Voting failed', type: 'error' });
     }
