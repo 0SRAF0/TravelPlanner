@@ -72,7 +72,7 @@ export default function ActivityList({
     const wsUrl = `${API.chat.chat}/${tripId}`;
     const ws = new WebSocket(wsUrl);
 
-    let pingInterval: NodeJS.Timeout;
+    let pingInterval: number;
 
     ws.onopen = () => {
       console.log('[ActivityList] WebSocket connected for activity updates');

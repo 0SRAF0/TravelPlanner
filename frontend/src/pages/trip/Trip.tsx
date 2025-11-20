@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
-import ActivityList from '../../components/activity/ActivityList';
+//import ActivityList from '../../components/activity/ActivityList';
 import Notification from '../../components/notification/Notification';
 import { API } from '../../services/api';
 import ConfirmProceedModal from './components/ConfirmProceedModal.tsx';
