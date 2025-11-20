@@ -4,7 +4,6 @@ import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
 import Notification from '../../components/notification/Notification';
 import { API } from '../../services/api';
-import ConfirmProceedModal from './components/ConfirmProceedModal.tsx';
 
 interface Member {
   user_id: string;
@@ -26,7 +25,7 @@ interface TripData {
   creator_id: string;
 }
 
-export default function Trip() {
+export default function TripDetail() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
   const [trip, setTrip] = useState<TripData | null>(null);
@@ -37,8 +36,7 @@ export default function Trip() {
     type?: 'success' | 'error' | 'warning';
   } | null>(null);
   const [processingAllIn, setProcessingAllIn] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingMembers, setPendingMembers] = useState<{ name: string; picture?: string }[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
   const fetchTripDetailsRef = useRef<(() => Promise<void>) | null>(null);
 
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
@@ -56,9 +54,7 @@ export default function Trip() {
     setError(null);
 
     try {
-      const url = new URL(API.trip.get);
-      url.searchParams.set('trip_id', String(tripId));
-      const response = await fetch(url.toString());
+      const response = await fetch(`${API.trip.get}/${tripId}`);
       const result = await response.json();
 
       if (result.code === 0 && result.data) {
@@ -82,14 +78,15 @@ export default function Trip() {
     fetchTripDetails();
   }, [fetchTripDetails]);
 
-  // WebSocket listener for all-in navigation broadcast and member updates
+  // WebSocket listener for real-time updates (member joins, preferences submitted)
   useEffect(() => {
     if (!tripId || tripId === 'undefined') return;
 
-    const ws = new WebSocket(`ws://localhost:8060/chat/${tripId}`);
+    const wsUrl = `${API.chat.chat}/${tripId}`;
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log('[Trip] WebSocket connected');
+      console.log('[TripDetail] WebSocket connected for trip updates');
       // Send a ping message to complete the WebSocket handshake loop on the backend
       ws.send(
         JSON.stringify({
@@ -103,42 +100,38 @@ export default function Trip() {
 
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        console.log('[Trip] WebSocket message received:', data);
-
-        // Listen for navigate_to_chat broadcast
-        if (data.type === 'navigate_to_chat') {
-          console.log('[Trip] Received navigate_to_chat broadcast, navigating...');
-          navigate(`/trip/chat/${tripId}`);
-        }
+        const message = JSON.parse(event.data);
+        console.log('[TripDetail] WebSocket message received:', message);
 
         // Refresh trip details when a new member joins
-        if (data.type === 'member_joined') {
-          console.log('[Trip] New member joined, refreshing trip details...');
-          fetchTripDetailsRef.current?.();
-        }
-
-        // Refresh trip details when someone submits preferences
-        if (data.type === 'preference_submitted') {
-          console.log('[Trip] Member submitted preferences, refreshing trip details...');
+        if (message.type === 'member_joined') {
+          console.log('[TripDetail] New member joined, refreshing trip details...');
           fetchTripDetailsRef.current?.();
         }
       } catch (error) {
-        console.error('[Trip] WebSocket message parse error:', error);
+        console.error('[TripDetail] WebSocket message parse error:', error);
       }
     };
 
     ws.onerror = (error) => {
-      console.error('[Trip] WebSocket error:', error);
+      console.error('[TripDetail] WebSocket error:', error);
     };
+
+    ws.onclose = () => {
+      console.log('[TripDetail] WebSocket disconnected');
+    };
+
+    wsRef.current = ws;
 
     return () => {
-      ws.close();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
     };
-  }, [tripId, navigate]);
+  }, [tripId]);
 
   const handleSetPreferences = () => {
-    navigate(`/trip/preferences/${tripId}`);
+    navigate(`/trip/${tripId}/preferences`);
   };
 
   const handleCopyCode = () => {
@@ -148,23 +141,33 @@ export default function Trip() {
     }
   };
 
-  const startAllIn = async () => {
+  const handleAllIn = async () => {
+    if (!trip) return;
+
+    const notSubmitted = trip.member_details.filter((m) => !m.has_submitted_preferences);
+
+    if (notSubmitted.length > 0) {
+      const names = notSubmitted.map((m) => m.name).join(', ');
+      const confirmed = window.confirm(
+        `Not everyone has submitted preferences yet:\n\n${names}\n\nProceed anyway? The AI will work with available preferences.`,
+      );
+
+      if (!confirmed) return;
+    }
+
     setProcessingAllIn(true);
     try {
       const response = await fetch(API.trip.allIn, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trip_id: tripId }),
       });
 
       const result = await response.json();
 
       if (result.code === 0) {
-        // Wait a moment to allow the backend to broadcast to other users
-        // before we navigate (otherwise we might close our WebSocket too early)
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        navigate(`/trip/chat/${tripId}`);
+        // Navigate to chat immediately - orchestrator runs in background
+        navigate(`/trip/${tripId}/chat`);
       } else {
+        // Show error
         setToast({
           message: result.msg || 'Failed to start planning',
           type: 'error',
@@ -178,20 +181,6 @@ export default function Trip() {
     } finally {
       setProcessingAllIn(false);
     }
-  };
-
-  const handleAllIn = async () => {
-    if (!trip) return;
-
-    const notSubmitted = trip.member_details.filter((m) => !m.has_submitted_preferences);
-
-    if (notSubmitted.length > 0) {
-      setPendingMembers(notSubmitted.map((m) => ({ name: m.name, picture: m.picture })));
-      setShowConfirm(true);
-      return;
-    }
-
-    await startAllIn();
   };
   if (loading) {
     return (
@@ -222,7 +211,7 @@ export default function Trip() {
   const canTriggerAllIn = trip.members_with_preferences.length > 0;
 
   return (
-    <div className="min-h-screen py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
@@ -298,36 +287,40 @@ export default function Trip() {
             ))}
           </div>
 
-          {/* All In Button / Go to Chat */}
+          {/* All In Button */}
           {canTriggerAllIn && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div>
                   <p className="text-sm text-gray-600">
-                    {trip.status === 'planning'
-                      ? '🤖 AI is planning your trip! Check the chat to see progress.'
-                      : allSubmitted
-                        ? '🎉 Everyone has submitted! Ready to generate your itinerary.'
-                        : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
+                    {allSubmitted
+                      ? '🎉 Everyone has submitted! Ready to generate your itinerary.'
+                      : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
                   </p>
                 </div>
-                {trip.status === 'planning' ? (
-                  <Button
-                    text="Go to Chat 💬"
-                    onClick={() => navigate(`/trip/chat/${tripId}`)}
-                    size="lg"
-                  />
-                ) : (
-                  <Button
-                    text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
-                    onClick={handleAllIn}
-                    size="lg"
-                  />
-                )}
+                <Button
+                  text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
+                  onClick={handleAllIn}
+                  size="lg"
+                />
               </div>
             </div>
           )}
         </div>
+
+        {/* Activities Section */}
+        {trip.status !== 'collecting_preferences' && (
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Suggested Activities</h2>
+            <ActivityList
+              tripId={trip.trip_id}
+              limit={20}
+              cardWidthPx={400}
+              cardHeightPx={280}
+              modalMaxWidth="600px"
+            />
+          </div>
+        )}
       </div>
 
       <Notification
@@ -335,16 +328,6 @@ export default function Trip() {
         message={toast?.message || ''}
         type={toast?.type}
         onClose={() => setToast(null)}
-      />
-      <ConfirmProceedModal
-        isOpen={showConfirm}
-        pendingMembers={pendingMembers}
-        isProcessing={processingAllIn}
-        onClose={() => setShowConfirm(false)}
-        onConfirm={async () => {
-          setShowConfirm(false);
-          await startAllIn();
-        }}
       />
     </div>
   );

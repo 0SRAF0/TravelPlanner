@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import Input from '../../components/input/Input';
 import Notification from '../../components/notification/Notification';
@@ -7,8 +7,8 @@ import LocationAutocomplete from '../../components/input/LocationAutocomplete';
 import { API } from '../../services/api';
 
 interface PreferenceFormProps {
-  tripId: string;
-  userId: string;
+  tripId?: string;
+  userId?: string;
   onComplete?: () => void;
 }
 
@@ -30,25 +30,17 @@ const BUDGET_LABELS = {
   4: { label: 'Luxury', symbol: '$$$$', description: 'Treat yourself' },
 };
 
-export default function PreferenceForm({ tripId, userId, onComplete }: PreferenceFormProps) {
+export default function PreferenceForm({
+  tripId: tripIdProp,
+  userId: userIdProp,
+  onComplete,
+}: PreferenceFormProps) {
   const navigate = useNavigate();
-  // Ensure we have valid tripId and userId; fall back to localStorage / URL when possible
-  const effectiveUserId = userId || JSON.parse(localStorage.getItem('user_info') || '{}').id;
-  // Robustly extract tripId from URL if not provided via props
-  const effectiveTripId =
-    tripId ||
-    (() => {
-      const parts = window.location.pathname.split('/').filter(Boolean);
-      // Expecting /trip/preferences/:tripId or /trip/:tripId/preferences
-      // Prefer the last segment if it's not 'preferences' or 'trip'
-      const last = parts[parts.length - 1];
-      if (last && last !== 'trip' && last !== 'preferences') return last;
-      // Fallback to segment after 'trip'
-      const idx = parts.indexOf('trip');
-      if (idx >= 0 && parts[idx + 1] && parts[idx + 1] !== 'preferences') return parts[idx + 1];
-      // As a last resort return undefined (handled by validations)
-      return undefined as unknown as string;
-    })();
+  const { tripId: tripIdParam } = useParams<{ tripId: string }>();
+
+  // Use URL param first (most reliable), then prop
+  const effectiveTripId = tripIdParam || tripIdProp;
+  const effectiveUserId = userIdProp || JSON.parse(localStorage.getItem('user_info') || '{}').id;
   const [destination, setDestination] = useState('');
   const [budgetLevel, setBudgetLevel] = useState<number>(2);
   const [selectedVibes, setSelectedVibes] = useState<Vibe[]>([]);

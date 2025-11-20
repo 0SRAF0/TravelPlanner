@@ -8,12 +8,14 @@ from app.agents.agent_state import AgentState
 from app.agents.destination_research_agent import DestinationResearchAgent
 from app.agents.itinerary_agent import ItineraryAgent
 from app.agents.preference_agent import PreferenceAgent
+from app.agents.consensus_agent import ConsensusAgent
 from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
 
 # --- Instantiate agents ---
 preference_agent = PreferenceAgent()
 destination_research_agent = DestinationResearchAgent()
 itinerary_agent = ItineraryAgent()
+consensus_agent = ConsensusAgent()
 
 # --- Worker registry: add new agents here later ---
 WORKERS: dict[str, dict[str, str]] = {
@@ -21,6 +23,10 @@ WORKERS: dict[str, dict[str, str]] = {
     "preference_processor": {
         "node": "preference_agent",
         "desc": "Process and save user travel preferences (budget, vibes, deal breakers)",
+    },
+    "consensus_resolver": {
+        "node": "consensus_agent",
+        "desc": "Resolve conflicts through voting when users disagree on destination, dates, activities, or itinerary",
     },
     "destination_researcher": {
         "node": "destination_research_agent",
@@ -38,7 +44,11 @@ WORKERS: dict[str, dict[str, str]] = {
 try:
     # Prefer explicit API key; avoid ADC requirement in local/dev
     llm = (
-        ChatGoogleGenerativeAI(model=GOOGLE_AI_MODEL, api_key=GOOGLE_AI_API_KEY)
+        ChatGoogleGenerativeAI(
+            model=GOOGLE_AI_MODEL, 
+            api_key=GOOGLE_AI_API_KEY,
+            max_retries=0  # Disable LangChain's retry - let agents handle retries
+        )
         if GOOGLE_AI_API_KEY
         else None
     )
@@ -63,9 +73,10 @@ Registry (key → capability):
 
 Routing rules:
 1) If trip_id exists and no preferences_summary → preference_processor (fetch and aggregate)
-2) If preferences_summary exists, destination provided, and no activity_catalog → destination_researcher
-3) If activity_catalog exists, trip_duration_days is set, and no itinerary → itinerary_planner
-4) If all relevant items are done or goal accomplished → end
+2) If phase_tracking exists and current_phase requires consensus → consensus_resolver (resolve conflicts through voting)
+3) If preferences_summary exists, destination provided, and no activity_catalog → destination_researcher
+4) If activity_catalog exists, trip_duration_days is set, and no itinerary → itinerary_planner
+5) If all relevant items are done or goal accomplished → end
 
 Return JSON only.
 """
@@ -83,12 +94,65 @@ def _needs_preference_processing(state: AgentState) -> bool:
     return result
 
 
+def _needs_consensus(state: AgentState) -> bool:
+    """Check if consensus is needed to resolve user conflicts."""
+    agent_data = state.get("agent_data", {}) or {}
+    phase_tracking = agent_data.get("phase_tracking")
+    
+    print(f"\n[orchestrator] ======= _needs_consensus check =======")
+    print(f"[orchestrator] phase_tracking = {phase_tracking}")
+    
+    if not phase_tracking:
+        print(f"[orchestrator] No phase_tracking found - no consensus needed")
+        return False
+    
+    current_phase = phase_tracking.get("current_phase")
+    print(f"[orchestrator] current_phase = {current_phase}")
+    
+    # If current_phase is None or empty, consensus is complete
+    if not current_phase:
+        print(f"[orchestrator] No active consensus phase - proceeding with normal flow")
+        return False
+    
+    phases = phase_tracking.get("phases", {})
+    
+    # Check if current phase requires consensus and isn't completed
+    if current_phase in phases:
+        phase_data = phases[current_phase]
+        status = phase_data.get("status")
+        print(f"[orchestrator] Phase '{current_phase}' has status: {status}")
+        # Only trigger consensus if status is "active" (not "voting_in_progress" or "completed")
+        result = status == "active"
+        if result:
+            print(f"[orchestrator] ✅ Consensus needed for phase: {current_phase}")
+        elif status == "voting_in_progress":
+            print(f"[orchestrator] ⏸️ Phase {current_phase} waiting for votes, skipping consensus")
+        else:
+            print(f"[orchestrator] ❌ Phase {current_phase} status '{status}' - no consensus needed")
+        return result
+    
+    print(f"[orchestrator] Phase '{current_phase}' not found in phases dict")
+    return False
+
+
 def _needs_destination_research(state: AgentState) -> bool:
     """Check if destination research needs to be performed."""
     agent_data = state.get("agent_data", {}) or {}
     has_preferences = agent_data.get("preferences_summary") is not None
     has_catalog = agent_data.get("activity_catalog") is not None
     has_destination = bool(agent_data.get("destination"))
+    
+    # Don't do research if we're still in destination_decision phase (waiting for votes)
+    phase_tracking = agent_data.get("phase_tracking", {})
+    current_phase = phase_tracking.get("current_phase")
+    if current_phase == "destination_decision":
+        phases = phase_tracking.get("phases", {})
+        dest_phase = phases.get("destination_decision", {})
+        dest_status = dest_phase.get("status", "")
+        if dest_status in ["active", "voting_in_progress"]:
+            print(f"[orchestrator] Skipping destination research - destination_decision phase is {dest_status}")
+            return False
+    
     result = has_preferences and has_destination and not has_catalog
     if result:
         print(f"[orchestrator] Destination research needed for {agent_data.get('destination')}")
@@ -101,9 +165,39 @@ def _needs_itinerary_generation(state: AgentState) -> bool:
     has_catalog = agent_data.get("activity_catalog") is not None
     has_itinerary = agent_data.get("itinerary") is not None
     trip_duration_days = agent_data.get("trip_duration_days") or state.get("trip_duration_days")
-    result = has_catalog and bool(trip_duration_days) and not has_itinerary
+    
+    # Check if activity voting phase is completed
+    phase_tracking = agent_data.get("phase_tracking")
+    activity_voting_complete = False
+    
+    if phase_tracking:
+        phases = phase_tracking.get("phases", {})
+        activity_phase = phases.get("activity_voting", {})
+        status = activity_phase.get("status", "pending")
+        activity_voting_complete = status == "completed"
+        
+        # Log current activity voting status
+        print(f"[orchestrator] Activity voting phase status: {status}")
+        
+        if status == "active":
+            print(f"[orchestrator] Activity voting in progress - waiting for users to vote")
+            return False
+        elif status == "pending":
+            print(f"[orchestrator] Activity voting not yet started - waiting for activities")
+            return False
+    else:
+        # No phase_tracking means old trip without voting system
+        print(f"[orchestrator] No phase_tracking found - this shouldn't happen for new trips")
+        return False
+    
+    # Only generate itinerary if we have catalog, duration, no itinerary yet, AND activity voting is done
+    result = has_catalog and bool(trip_duration_days) and not has_itinerary and activity_voting_complete
+    
     if result:
-        print(f"[orchestrator] Itinerary generation needed for {trip_duration_days} days")
+        print(f"[orchestrator] ✅ Itinerary generation needed for {trip_duration_days} days")
+    elif has_catalog and bool(trip_duration_days) and not has_itinerary:
+        print(f"[orchestrator] ⏸️ Itinerary generation blocked - waiting for activity voting to complete")
+    
     return result
 
 
@@ -127,6 +221,8 @@ def supervisor_agent(state: AgentState) -> AgentState:
 
     if _needs_preference_processing(state):
         deterministic_suggestion = "preference_processor"
+    elif _needs_consensus(state):
+        deterministic_suggestion = "consensus_resolver"
     elif _needs_destination_research(state):
         deterministic_suggestion = "destination_researcher"
     elif _needs_itinerary_generation(state):
@@ -144,6 +240,7 @@ def supervisor_agent(state: AgentState) -> AgentState:
         "has_activity_catalog": bool(agent_data.get("activity_catalog")),
         "has_itinerary": bool(agent_data.get("itinerary")),
         "needs_preference_processing": _needs_preference_processing(state),
+        "needs_consensus": _needs_consensus(state),
         "needs_destination_research": _needs_destination_research(state),
         "needs_itinerary_generation": _needs_itinerary_generation(state),
         "current_step": steps,
@@ -160,13 +257,13 @@ History:
 {history_text}
 """
 
-    # If LLM unavailable, fall back to deterministic routing
-    if llm is None:
+    # If LLM unavailable OR we have a clear deterministic path, use it directly
+    if llm is None or deterministic_suggestion:
         next_task = deterministic_suggestion or "end"
         reason = (
-            "LLM unavailable; using deterministic routing"
+            f"Deterministic routing: {deterministic_suggestion}"
             if deterministic_suggestion
-            else "LLM unavailable; ending workflow"
+            else "No more work needed; ending workflow"
         )
         print(f"\n[SUPERVISOR - Step {steps}]")
         print(f"  Next task: {next_task}")
@@ -180,6 +277,9 @@ History:
             "done": next_task == "end",
         }
 
+    # Only call LLM if no deterministic path found (rare edge cases)
+    # This should rarely happen with proper deterministic routing
+    print(f"[orchestrator] ⚠️ No deterministic path - using LLM fallback (rare case)")
     choice = llm.with_structured_output(SupervisorChoice).invoke(
         [
             {
@@ -237,6 +337,98 @@ async def destination_research_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running destination_research_agent...")
     result = await destination_research_agent.app.ainvoke(state)
     print("[AGENT] destination_research_agent completed.")
+    
+    # Save activities to database so they appear in the UI
+    agent_data = result.get("agent_data", {}) or {}
+    activities = agent_data.get("activity_catalog", []) or []
+    trip_id = result.get("trip_id")
+    
+    if activities and trip_id:
+        try:
+            from app.db.database import get_activities_collection
+            from app.models.activity import Activity
+            
+            col = get_activities_collection()
+            
+            # Clear existing activities for this trip
+            await col.delete_many({"trip_id": trip_id})
+            
+            # Convert activities to database documents
+            docs = []
+            for a in activities:
+                try:
+                    doc = Activity(
+                        trip_id=str(a.get("trip_id") or trip_id),
+                        name=str(a.get("name", "")),
+                        category=str(a.get("category", "Other")),
+                        rough_cost=a.get("rough_cost"),
+                        duration_min=a.get("duration_min"),
+                        lat=a.get("lat"),
+                        lng=a.get("lng"),
+                        tags=list(a.get("tags") or []),
+                        fits=list(a.get("fits") or []),
+                        score=float(a.get("score") or 0.0),
+                        rationale=str(a.get("rationale") or ""),
+                        photo_url=a.get("photo_url"),
+                    )
+                    docs.append(doc.model_dump())
+                except Exception as e:
+                    print(f"[orchestrator] Skipping invalid activity: {e}")
+            
+            if docs:
+                res = await col.insert_many(docs)
+                print(f"[orchestrator] ✅ Saved {len(res.inserted_ids)} activities to database for trip {trip_id}")
+                
+                # Initialize activity_voting phase
+                from app.db.database import get_database
+                from bson import ObjectId
+                from datetime import datetime
+                
+                try:
+                    db = get_database()
+                    trips = db.trips
+                    
+                    # Initialize phase tracking if not exists
+                    trip_doc = await trips.find_one({"_id": ObjectId(trip_id)})
+                    if trip_doc:
+                        phase_tracking = trip_doc.get("phase_tracking", {})
+                        phases = phase_tracking.get("phases", {})
+                        
+                        # Initialize activity_voting phase
+                        phases["activity_voting"] = {
+                            "status": "pending",
+                            "created_at": datetime.utcnow(),
+                            "description": "Members vote on suggested activities"
+                        }
+                        
+                        # Only update the activity_voting phase, DON'T change current_phase
+                        # The current_phase should remain on destination/date consensus until those are resolved
+                        await trips.update_one(
+                            {"_id": ObjectId(trip_id)},
+                            {
+                                "$set": {
+                                    "phase_tracking.phases.activity_voting": phases["activity_voting"],
+                                    "updated_at": datetime.utcnow()
+                                }
+                            }
+                        )
+                        
+                        # Update agent_data with phase_tracking but preserve current_phase
+                        existing_phase_tracking = agent_data.get("phase_tracking", {})
+                        agent_data["phase_tracking"] = {
+                            "current_phase": existing_phase_tracking.get("current_phase"),
+                            "phases": phases
+                        }
+                        result["agent_data"] = agent_data
+                        
+                        print(f"[orchestrator] ✅ Initialized activity_voting phase (status: pending)")
+                except Exception as e:
+                    print(f"[orchestrator] ❌ Failed to initialize activity_voting phase: {e}")
+            else:
+                print(f"[orchestrator] ⚠️ No valid activities to save")
+        except Exception as e:
+            print(f"[orchestrator] ❌ Failed to save activities: {e}")
+    
     return result
 
 
@@ -247,10 +439,53 @@ async def itinerary_agent_wrapper(state: AgentState) -> AgentState:
     return result
 
 
+async def consensus_agent_wrapper(state: AgentState) -> AgentState:
+    print("\n[AGENT] Running consensus_agent...")
+    result = await consensus_agent.run(state)
+    
+    # Check if consensus cleared phase_tracking (meaning it's done)
+    agent_data = result.get("agent_data", {}) or {}
+    
+    # If consensus cleared phase_tracking, it means destination was resolved
+    # Don't reload from DB - let orchestrator continue with resolved destination
+    if agent_data.get("phase_tracking") is None:
+        destination = agent_data.get("destination")
+        if destination:
+            print(f"[AGENT] ✅ Consensus resolved destination: {destination}")
+            print(f"[AGENT] Orchestrator will now proceed to destination_research")
+    else:
+        # Consensus is waiting (voting_in_progress) - reload to get latest state
+        trip_id = state.get("trip_id")
+        if trip_id:
+            from app.db.database import get_database
+            from bson import ObjectId
+            db = get_database()
+            trips = db.trips
+            
+            try:
+                trip = await trips.find_one({"_id": ObjectId(trip_id)})
+            except:
+                trip = await trips.find_one({"trip_code": trip_id.upper()})
+            
+            if trip:
+                phase_tracking = trip.get("phase_tracking")
+                if phase_tracking:
+                    current_phase = phase_tracking.get("current_phase")
+                    if current_phase:
+                        status = phase_tracking.get("phases", {}).get(current_phase, {}).get("status")
+                        print(f"[AGENT] Phase {current_phase} status: {status}")
+                    agent_data["phase_tracking"] = phase_tracking
+                    result["agent_data"] = agent_data
+    
+    print("[AGENT] consensus_agent completed.")
+    return result
+
+
 # ---- Build the top-level graph ----
 graph = StateGraph(AgentState)
 graph.add_node("supervisor_agent", supervisor_agent)
 graph.add_node("preference_agent", preference_agent_wrapper)
+graph.add_node("consensus_agent", consensus_agent_wrapper)
 graph.add_node("destination_research_agent", destination_research_agent_wrapper)
 graph.add_node("itinerary_agent", itinerary_agent_wrapper)
 
@@ -260,18 +495,20 @@ graph.add_conditional_edges(
     agent_router,
     {
         "preference_agent": "preference_agent",
+        "consensus_agent": "consensus_agent",
         "destination_research_agent": "destination_research_agent",
         "itinerary_agent": "itinerary_agent",
         "end": END,
     },
 )
 graph.add_edge("preference_agent", "supervisor_agent")
+graph.add_edge("consensus_agent", "supervisor_agent")
 graph.add_edge("destination_research_agent", "supervisor_agent")
 graph.add_edge("itinerary_agent", "supervisor_agent")
 
-checkpointer = MemorySaver()
-app = graph.compile(checkpointer=checkpointer)
-config = {"configurable": {"thread_id": "1"}, "recursion_limit": 50}
+# Compile without checkpointer to avoid msgpack serialization issues
+app = graph.compile()
+config = {"recursion_limit": 50}
 
 
 async def run_orchestrator_agent(initial_state: AgentState) -> AgentState:

@@ -10,6 +10,7 @@ export interface Activity {
   fits: string[]; // user ids or names
   score: number; // 0..1
   rationale: string;
+  photo_url?: string | null;
   created_at?: string;
   updated_at?: string;
 }

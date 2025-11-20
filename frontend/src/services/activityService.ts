@@ -31,15 +31,19 @@ export const activityService = {
   },
 
   async vote(body: VoteRequest): Promise<VoteResponse> {
-    // Optional endpoint; gracefully handle if missing
+    // Backend expects query parameters, not JSON body
+    const url = new URL(API.activities.vote);
+    url.searchParams.set('trip_id', body.trip_id);
+    url.searchParams.set('activity_name', body.activity_name);
+    url.searchParams.set('user_id', body.user_id);
+    url.searchParams.set('vote', body.vote);
+
     const token = authService.getToken?.();
-    const response = await fetch(API.activities.vote, {
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(body),
     });
     if (!response.ok) {
       // Return a consistent error

@@ -4,6 +4,7 @@ import ActivityCard from './ActivityCard';
 import { activityService } from '../../services/activityService';
 import Notification from '../notification/Notification';
 import { authService } from '../../services/authService';
+import { API } from '../../services/api';
 
 export interface ActivityListProps {
   tripId: string;
@@ -37,6 +38,7 @@ export default function ActivityList({
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const gapPx = 14;
   const cardStyle = useMemo(
@@ -64,6 +66,89 @@ export default function ActivityList({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // WebSocket listener for real-time activity updates
+  useEffect(() => {
+    const wsUrl = `${API.chat.chat}/${tripId}`;
+    const ws = new WebSocket(wsUrl);
+
+    let pingInterval: NodeJS.Timeout;
+
+    ws.onopen = () => {
+      console.log('[ActivityList] WebSocket connected for activity updates');
+      // Send initial ping message to complete the WebSocket handshake loop on the backend
+      const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
+      const pingMessage = JSON.stringify({
+        type: 'ping',
+        senderId: currentUser.id || 'anonymous',
+        senderName: currentUser.name || 'Anonymous',
+        content: '',
+      });
+      ws.send(pingMessage);
+
+      // Send ping every 30 seconds to keep connection alive during long voting sessions
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(pingMessage);
+          console.log('[ActivityList] Keepalive ping sent');
+        }
+      }, 30000); // 30 seconds
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Debug: Log all agent_status messages
+        if (message.type === 'agent_status') {
+          console.log('[ActivityList] Agent status received:', {
+            agent_name: message.agent_name,
+            status: message.status,
+            step: message.step,
+          });
+        }
+
+        // Listen for agent status indicating activities are ready
+        if (
+          message.type === 'agent_status' &&
+          message.agent_name === 'Destination Research Agent' &&
+          message.status === 'completed' &&
+          message.step?.includes('activity suggestions')
+        ) {
+          console.log('[ActivityList] Activities generated, auto-refreshing...');
+          fetchData();
+        }
+
+        // Listen for itinerary generation completion
+        if (message.type === 'agent_status' && message.agent_name === 'Itinerary Agent') {
+          console.log('[ActivityList] Itinerary Agent status:', message.status);
+          if (message.status === 'completed') {
+            console.log('[ActivityList] Itinerary generation completed!');
+            // Could trigger navigation or notification here
+          }
+        }
+      } catch (error) {
+        console.error('[ActivityList] WebSocket message parse error:', error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('[ActivityList] WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('[ActivityList] WebSocket disconnected');
+    };
+
+    wsRef.current = ws;
+
+    return () => {
+      clearInterval(pingInterval);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [tripId, fetchData]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const el = containerRef.current;
@@ -117,7 +202,7 @@ export default function ActivityList({
         user_id: user.id,
         vote,
       });
-      setToast({ message: vote === 'up' ? 'Voted up' : 'Voted down', type: 'success' });
+      // Don't show toast on success - vote button provides visual feedback
     } catch (e: any) {
       setToast({ message: e?.message || 'Voting failed', type: 'error' });
     }
@@ -125,21 +210,13 @@ export default function ActivityList({
 
   return (
     <div className={className}>
-      {/* Header row with error / retry */}
+      {/* Header row */}
       <div className="flex items-center justify-between mb-2 px-1">
         <div className="text-left">
           <div className="text-sm font-extrabold">Activities</div>
           {category && <div className="text-xs opacity-60">{category}</div>}
         </div>
-        <button
-          className="text-xs font-bold underline opacity-80 hover:opacity-100"
-          onClick={fetchData}
-        >
-          Refresh
-        </button>
       </div>
-
-      
 
       {/* Scroll container */}
       <div

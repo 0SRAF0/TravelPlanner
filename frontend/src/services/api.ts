@@ -38,9 +38,12 @@ export const API = {
     create: `${BASE_URL}/trips`,
     join: `${BASE_URL}/trips/join`,
     get: `${BASE_URL}/trips`,
-    user:`${BASE_URL}/trips/user`,
+    user: `${BASE_URL}/trips/user`,
     allIn: `${BASE_URL}/trips/all-in`,
     delete: `${BASE_URL}/trips`,
+    markReady: (tripId: string) => `${BASE_URL}/trips/${tripId}/phases/mark-ready`,
+    unmarkReady: (tripId: string) => `${BASE_URL}/trips/${tripId}/phases/unmark-ready`,
+    vote: (tripId: string) => `${BASE_URL}/trips/${tripId}/vote`,
   },
 
   // Preferences endpoints
@@ -64,5 +67,6 @@ export const API = {
   // Chat endpoints (WebSocket)
   chat: {
     chat: `${WS_BASE_URL}/chat`,
+    react: (messageId: string) => `${BASE_URL}/chat/messages/${messageId}/react`,
   },
 } as const;

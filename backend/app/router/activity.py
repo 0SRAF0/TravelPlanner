@@ -61,5 +61,82 @@ async def vote_activity(
     user_id: str,
     vote: str,  # 'up' or 'down'
 ):
-    # TODO: Store votes and potentially re-rank activities
-    pass
+    """
+    Record user vote on an activity.
+    Votes are stored per activity and update net_score in real-time.
+    """
+    try:
+        col = get_activities_collection()
+        
+        # Find activity
+        activity = await col.find_one({
+            "trip_id": trip_id,
+            "name": activity_name
+        })
+        
+        if not activity:
+            raise HTTPException(status_code=404, detail=f"Activity '{activity_name}' not found")
+        
+        # Get existing votes dict
+        votes = activity.get("votes", {})
+        
+        # Update vote
+        if vote == "up":
+            votes[user_id] = "up"
+        elif vote == "down":
+            votes[user_id] = "down"
+        else:
+            # Invalid vote, remove if exists (neutral)
+            votes.pop(user_id, None)
+        
+        # Calculate scores
+        upvote_count = sum(1 for v in votes.values() if v == "up")
+        downvote_count = sum(1 for v in votes.values() if v == "down")
+        net_score = upvote_count - downvote_count
+        
+        # Update activity in database
+        from datetime import datetime
+        await col.update_one(
+            {"trip_id": trip_id, "name": activity_name},
+            {
+                "$set": {
+                    "votes": votes,
+                    "upvote_count": upvote_count,
+                    "downvote_count": downvote_count,
+                    "net_score": net_score,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast vote update via WebSocket (non-blocking)
+        from app.router.chat import broadcast_to_chat
+        import asyncio
+        asyncio.create_task(broadcast_to_chat(trip_id, {
+            "type": "activity_vote_update",
+            "activity_name": activity_name,
+            "user_id": user_id,
+            "vote": vote,
+            "upvote_count": upvote_count,
+            "downvote_count": downvote_count,
+            "net_score": net_score,
+            "timestamp": datetime.utcnow().isoformat()
+        }))
+        
+        return APIResponse(
+            code=0,
+            msg="ok",
+            data={
+                "activity_name": activity_name,
+                "vote": vote,
+                "net_score": net_score,
+                "upvote_count": upvote_count,
+                "downvote_count": downvote_count
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[vote_activity] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to record vote: {str(e)}")

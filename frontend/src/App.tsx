@@ -9,8 +9,8 @@ import Trip from './pages/trip/Trip.tsx';
 import PreferenceForm from './pages/preferences/PreferenceForm.tsx';
 import { Chat } from './pages/chat/Chat.tsx';
 import { authService } from './services/authService.ts';
-import { useEffect, useState } from "react";
-import { ChatButton } from "./components/chat";
+import { useEffect, useState } from 'react';
+import { ChatButton } from './components/chat';
 
 // Protected Route Component
 const ProtectedHome = () => {
@@ -81,10 +81,7 @@ function App() {
             path="/trip/preferences/:tripId"
             element={
               <ProtectedRoute>
-                <PreferenceForm
-                  tripId={window.location.pathname.split('/')[3]}
-                  userId={JSON.parse(localStorage.getItem('user_info') || '{}').id}
-                />
+                <PreferenceForm />
               </ProtectedRoute>
             }
           />

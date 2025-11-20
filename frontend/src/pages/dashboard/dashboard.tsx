@@ -65,14 +65,18 @@ const Dashboard = () => {
         } else {
           // focus the join input (best-effort)
           setTimeout(() => {
-            const el = document.querySelector<HTMLInputElement>('input[placeholder="Enter trip code"]');
+            const el = document.querySelector<HTMLInputElement>(
+              'input[placeholder="Enter trip code"]',
+            );
             el?.focus();
           }, 100);
         }
       } else {
         // Just focus the join input so the user can paste the code
         setTimeout(() => {
-          const el = document.querySelector<HTMLInputElement>('input[placeholder="Enter trip code"]');
+          const el = document.querySelector<HTMLInputElement>(
+            'input[placeholder="Enter trip code"]',
+          );
           el?.focus();
         }, 100);
       }
@@ -82,16 +86,31 @@ const Dashboard = () => {
   const fetchuser = async () => {
     setLoading(true);
     try {
+      if (!currentUser.id) {
+        console.error('No user ID found in localStorage');
+        setToast({ message: 'Please log in again', type: 'error' });
+        setLoading(false);
+        return;
+      }
+
       const url = new URL(API.trip.user);
       url.searchParams.set('user_id', String(currentUser.id));
+      console.log('Fetching trips for user:', currentUser.id, 'from:', url.toString());
+
       const response = await fetch(url.toString());
       const result = await response.json();
 
+      console.log('Trips API response:', result);
+
       if (result.code === 0) {
-        setTrips(result.data);
+        setTrips(result.data || []);
+      } else {
+        console.error('API returned error:', result.msg);
+        setToast({ message: result.msg || 'Failed to load trips', type: 'error' });
       }
     } catch (err) {
       console.error('Failed to load trips:', err);
+      setToast({ message: 'Failed to load trips', type: 'error' });
     } finally {
       setLoading(false);
     }

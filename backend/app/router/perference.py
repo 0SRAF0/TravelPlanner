@@ -135,6 +135,19 @@ async def create_preference(body: CreatePreferenceRequest):
         print(
             f"[add_preference] Updated trip member status: matched={result.matched_count}, modified={result.modified_count}"
         )
+
+        # Broadcast preference submission to all connected clients
+        if result.modified_count > 0:  # Only broadcast if this was a new submission
+            from app.router.chat import broadcast_to_chat
+            try:
+                await broadcast_to_chat(tid, {
+                    "type": "preference_submitted",
+                    "trip_id": tid,
+                    "user_id": uid,
+                })
+                print(f"[add_preference] Broadcasted preference_submitted for user {uid}")
+            except Exception as e:
+                print(f"[add_preference] Failed to broadcast preference update: {e}")
     except Exception as e:
         print(f"[add_preference] Warning: could not update trip member status: {e}")
 

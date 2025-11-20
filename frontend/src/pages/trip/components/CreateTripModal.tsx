@@ -5,7 +5,6 @@ import Button from '../../../components/button';
 import Input from '../../../components/input';
 import Notification from '../../../components/notification/Notification.tsx';
 import { API } from '../../../services/api.ts';
-import LocationAutocomplete from '../../../components/input/LocationAutocomplete';
 
 interface CreateTripModalProps {
   isOpen: boolean;
@@ -16,7 +15,6 @@ interface CreateTripModalProps {
 export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTripModalProps) {
   const navigate = useNavigate();
   const [tripName, setTripName] = useState('');
-  const [destination, setDestination] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +51,6 @@ export default function CreateTripModal({ isOpen, onClose, onSuccess }: CreateTr
       if (result.code === 0 && result.data) {
         onSuccess?.(result.data);
         setTripName('');
-        setDestination('');
         onClose();
 
         // Redirect to preferences page

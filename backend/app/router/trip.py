@@ -21,6 +21,13 @@ from app.agents.agent_state import AgentState
 router = APIRouter(prefix="/trips", tags=["Trips"])
 
 
+class VoteRequest(BaseModel):
+    """Request to vote on consensus options - user can select multiple"""
+    user_id: str
+    options: list[str]  # Allow multiple selections
+    phase: str  # destination_decision, date_selection, activity_voting, etc.
+
+
 async def run_orchestrator_background(
     trip_id: str, destination: str, trip_duration_days: int, selected_dates: str
 ):
@@ -103,13 +110,23 @@ async def run_orchestrator_background(
     # Update status: analyzing preferences
     await broadcast_agent_status("Preference Agent", "running", "Fetching user preferences from database", progress={"current": 0, "total": 3})
 
+    # Fetch trip to check for phase_tracking (consensus phases)
+    trips_collection = db.trips
+    try:
+        trip_doc = await trips_collection.find_one({"_id": ObjectId(trip_id)})
+    except:
+        trip_doc = await trips_collection.find_one({"trip_code": trip_id.upper()})
+    
+    phase_tracking = trip_doc.get("phase_tracking") if trip_doc else None
+    
     # Run orchestrator
     initial_state = {
         "trip_id": trip_id,
-        "goal": f"Plan a {trip_duration_days}-day trip to {destination}",
+        "goal": f"Plan a {trip_duration_days}-day trip to {destination or 'TBD'}",
         "agent_data": {
             "destination": destination,
             "trip_duration_days": trip_duration_days,
+            "phase_tracking": phase_tracking,  # Pass phase_tracking so orchestrator can route to consensus
         },
         "broadcast_callback": broadcast_agent_status,  # Pass broadcast function to agents
     }
@@ -128,14 +145,9 @@ async def run_orchestrator_background(
         
         await broadcast_agent_status("Preference Agent", "completed", "Preferences analyzed", progress={"current": 3, "total": 3})
 
-        # Update status: destination research
+        # Update status: destination research starting
         await broadcast_agent_status(
-            "Destination Research Agent", "running", f"Geocoding destination: {destination}", progress={"current": 1, "total": 4}
-        )
-        await asyncio.sleep(0.5)
-        
-        await broadcast_agent_status(
-            "Destination Research Agent", "running", "Searching for nearby places and attractions", progress={"current": 2, "total": 4}
+            "Destination Research Agent", "starting", f"Preparing to research {destination}", progress={"current": 0, "total": 4}
         )
 
         result = await run_orchestrator_agent(initial_state)
@@ -145,14 +157,11 @@ async def run_orchestrator_background(
         activities = agent_data_out.get("activity_catalog", []) or []
         activity_count = len(activities)
         
-        await broadcast_agent_status(
-            "Destination Research Agent", "running", f"Found {activity_count} places. Generating descriptions with AI", progress={"current": 3, "total": 4}
-        )
-        await asyncio.sleep(0.5)
-        
-        await broadcast_agent_status(
-            "Destination Research Agent", "completed", f"Generated {activity_count} activity suggestions", progress={"current": 4, "total": 4}
-        )
+        # Only broadcast completion if we got results
+        if activities:
+            await broadcast_agent_status(
+                "Destination Research Agent", "completed", f"Generated {activity_count} activity suggestions", progress={"current": 4, "total": 4}
+            )
 
         # Note: Itinerary Agent will broadcast its own status updates via broadcast_callback
 
@@ -221,6 +230,14 @@ async def run_orchestrator_background(
             },
         )
 
+        # Clear orchestrator running flag
+        db = get_database()
+        trips_collection = db.trips
+        await trips_collection.update_one(
+            {"_id": ObjectId(trip_id)},
+            {"$set": {"orchestrator_status": "completed", "updated_at": datetime.utcnow()}}
+        )
+        
         print(f"[orchestrator_background] Completed for trip {trip_id}")
 
     except Exception as e:
@@ -257,6 +274,14 @@ async def run_orchestrator_background(
                 "type": "ai",
                 "createdAt": datetime.utcnow(),
             }
+        )
+        
+        # Clear orchestrator running flag on error
+        db = get_database()
+        trips_collection = db.trips
+        await trips_collection.update_one(
+            {"_id": ObjectId(trip_id)},
+            {"$set": {"orchestrator_status": "error", "updated_at": datetime.utcnow()}}
         )
 
         await broadcast_to_chat(
@@ -509,6 +534,18 @@ async def join_trip(body: JoinTripRequest):
 
         print(f"[join_trip] User {body.user_id} joined trip {body.trip_code}")
 
+        # Broadcast member update to all connected clients
+        from app.router.chat import broadcast_to_chat
+        try:
+            await broadcast_to_chat(trip_id, {
+                "type": "member_joined",
+                "trip_id": trip_id,
+                "user_id": body.user_id,
+                "member_count": len(updated_trip.get("members", [])),
+            })
+        except Exception as e:
+            print(f"[join_trip] Failed to broadcast member update: {e}")
+
         return APIResponse(
             code=0,
             msg="ok",
@@ -549,6 +586,27 @@ async def trigger_all_in(body: AllInTripRequest):
 
         if not trip_doc:
             raise HTTPException(status_code=404, detail=f"Trip {body.trip_id} not found")
+        
+        # Check if orchestrator already running
+        orchestrator_status = trip_doc.get("orchestrator_status")
+        if orchestrator_status == "running":
+            print(f"[all_in] Orchestrator already running for trip {body.trip_id}, skipping duplicate trigger")
+            trip_id_str = str(trip_doc["_id"])
+            return APIResponse(
+                code=0,
+                msg="ok",
+                data={
+                    "trip_id": trip_id_str,
+                    "status": "already_running",
+                    "message": "Planning already started by another user.",
+                },
+            )
+        
+        # Mark orchestrator as running
+        await trips_collection.update_one(
+            {"_id": trip_doc["_id"]},
+            {"$set": {"orchestrator_status": "running", "updated_at": datetime.utcnow()}}
+        )
 
         trip_id_str = str(trip_doc["_id"])
         members = trip_doc.get("members", [])
@@ -610,18 +668,237 @@ async def trigger_all_in(body: AllInTripRequest):
         all_destinations = []
         for p in all_prefs:
             if p.get("destination"):
-                all_destinations.append(p.get("destination").strip())
+                all_destinations.append(p.get("destination").strip().lower())  # Normalize to lowercase
+        
+        print(f"[all_in] All destinations from preferences: {all_destinations}")
         
         destination = None
+        has_destination_conflict = False
+        tied_destinations = []
         if all_destinations:
             dest_counter = Counter(all_destinations)
-            destination = dest_counter.most_common(1)[0][0] if dest_counter else all_destinations[0]
+            most_common = dest_counter.most_common()
+            
+            print(f"[all_in] Destination vote counts: {dict(dest_counter)}")
+            print(f"[all_in] Most common destinations: {most_common}")
+            
+            # If there's a clear winner (more votes than others), use it
+            if len(most_common) == 1 or most_common[0][1] > most_common[1][1]:
+                destination = most_common[0][0]
+                print(f"[all_in] ✅ Selected destination: {destination} ({most_common[0][1]} votes)")
+            else:
+                # Tie - let consensus_agent handle it
+                tied_destinations = [d for d, count in most_common if count == most_common[0][1]]
+                print(f"[all_in] ⚠️ Destination conflict detected: {tied_destinations}")
+                print(f"[all_in] Will let consensus_agent resolve in destination_decision phase")
+                has_destination_conflict = True
+                # Store conflict info for consensus_agent
+                destination = None  # Don't pick one arbitrarily
         
         # Fallback to trip's destination if no preferences have it
-        if not destination:
+        if not destination and not has_destination_conflict:
             destination = trip_doc.get("destination")
 
-        # Update trip with aggregated values
+        # Find overlapping dates across all users
+        has_date_conflict = False
+        overlapping_date_ranges = []
+        no_compatible_dates = False
+        
+        if all_date_ranges and len(all_date_ranges) > 1:
+            from datetime import datetime as dt
+            
+            try:
+                # Parse all date ranges
+                parsed_ranges = []
+                for date_range in all_date_ranges:
+                    if ":" in date_range:
+                        start_str, end_str = date_range.split(":")
+                        start = dt.fromisoformat(start_str)
+                        end = dt.fromisoformat(end_str)
+                        parsed_ranges.append((start, end, date_range))
+                
+                print(f"[all_in] Checking {len(parsed_ranges)} date ranges for overlaps")
+                
+                # Find all overlapping ranges
+                overlaps = set()
+                for i in range(len(parsed_ranges)):
+                    for j in range(i + 1, len(parsed_ranges)):
+                        start1, end1, range1 = parsed_ranges[i]
+                        start2, end2, range2 = parsed_ranges[j]
+                        
+                        # Check if ranges overlap
+                        if start1 <= end2 and start2 <= end1:
+                            # Calculate the overlapping period
+                            overlap_start = max(start1, start2)
+                            overlap_end = min(end1, end2)
+                            overlap_range = f"{overlap_start.date().isoformat()}:{overlap_end.date().isoformat()}"
+                            overlaps.add(overlap_range)
+                            print(f"[all_in] Found overlap: {overlap_range} between {range1} and {range2}")
+                
+                overlapping_date_ranges = list(overlaps)
+                
+                if len(overlapping_date_ranges) == 0:
+                    # No overlaps at all
+                    print(f"[all_in] ⚠️ No overlapping dates found! Users need to adjust availability.")
+                    no_compatible_dates = True
+                elif len(overlapping_date_ranges) == 1:
+                    # Single overlap - use it automatically
+                    selected_dates = overlapping_date_ranges[0]
+                    print(f"[all_in] ✅ Single overlapping period found: {selected_dates}")
+                    # Parse to get duration
+                    if ":" in selected_dates:
+                        start_str, end_str = selected_dates.split(":")
+                        start_date = dt.fromisoformat(start_str)
+                        end_date = dt.fromisoformat(end_str)
+                        trip_duration_days = (end_date - start_date).days + 1
+                else:
+                    # Multiple overlapping periods - need voting
+                    print(f"[all_in] ⚠️ Multiple overlapping periods found: {overlapping_date_ranges}")
+                    has_date_conflict = True
+                    
+            except Exception as e:
+                print(f"[all_in] Error checking date overlaps: {e}")
+                # If parsing fails, just pick most common
+                date_counter = Counter(all_date_ranges)
+                most_common_range = date_counter.most_common(1)[0][0] if date_counter else all_date_ranges[0]
+                selected_dates = most_common_range
+
+        # Handle no compatible dates case
+        if no_compatible_dates:
+            print(f"[all_in] ❌ No compatible dates found - notifying users")
+            
+            # Send message to chat
+            from app.router.chat import broadcast_to_chat
+            await broadcast_to_chat(trip_id_str, {
+                "senderId": "system",
+                "senderName": "AI Assistant",
+                "content": "⚠️ **No Compatible Dates Found!**\n\nYour available dates don't overlap. Please go back to the preferences page and add more date availability, then click 'All In' again.",
+                "type": "ai",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            
+            return APIResponse(
+                code=0,
+                msg="ok",
+                data={
+                    "trip_id": trip_id_str,
+                    "status": "dates_incompatible",
+                    "message": "No overlapping dates found. Please adjust preferences.",
+                    "requires_date_update": True
+                }
+            )
+        
+        # If there are ANY conflicts (destination or dates), initialize phase_tracking
+        if has_destination_conflict or has_date_conflict:
+            print(f"[all_in] Conflicts detected - orchestrator will coordinate consensus")
+            print(f"  - Destination conflict: {has_destination_conflict}")
+            print(f"  - Date conflict: {has_date_conflict}")
+            
+            # Determine which phase to start with (destination first, then dates)
+            if has_destination_conflict:
+                current_phase = "destination_decision"
+            elif has_date_conflict:
+                current_phase = "date_selection"
+            else:
+                current_phase = None
+            
+            # Initialize phase tracking for consensus
+            phase_tracking = {
+                "current_phase": current_phase,
+                "phases": {
+                    "destination_decision": {
+                        "status": "active" if has_destination_conflict else "completed",
+                        "started_at": datetime.utcnow() if has_destination_conflict else None,
+                        "users_ready": [],
+                        "destination_options": tied_destinations if has_destination_conflict else []
+                    },
+                    "date_selection": {
+                        "status": "pending" if has_destination_conflict else ("active" if has_date_conflict else "completed"),
+                        "started_at": None if has_destination_conflict else (datetime.utcnow() if has_date_conflict else None),
+                        "date_options": overlapping_date_ranges if has_date_conflict else []
+                    },
+                    "activity_voting": {"status": "pending"},
+                    "itinerary_approval": {"status": "pending"}
+                }
+            }
+            
+            # Update trip - orchestrator will pass phase_tracking through agent_data
+            await trips_collection.update_one(
+                {"_id": trip_doc["_id"]},
+                {
+                    "$set": {
+                        "trip_duration_days": trip_duration_days,
+                        "selected_dates": selected_dates,
+                        "status": "consensus",
+                        "phase_tracking": phase_tracking,
+                        "updated_at": datetime.utcnow(),
+                    }
+                },
+            )
+            
+            # Broadcast to chat and navigate
+            from app.router.chat import broadcast_to_chat
+            conflict_msg = []
+            if has_destination_conflict:
+                conflict_msg.append("destination")
+            if has_date_conflict:
+                conflict_msg.append("dates")
+            
+            message = f"Conflicts detected in {' and '.join(conflict_msg)}. Time to vote!"
+            
+            await broadcast_to_chat(trip_id_str, {
+                "type": "navigate_to_chat",
+                "trip_id": trip_id_str,
+                "message": message,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            
+            # Start orchestrator - it will see phase_tracking and route to consensus_agent first
+            asyncio.create_task(
+                run_orchestrator_background(
+                    trip_id_str, None, trip_duration_days, selected_dates  # destination=None, consensus will resolve it
+                )
+            )
+            
+            return APIResponse(
+                code=0,
+                msg="ok",
+                data={
+                    "trip_id": trip_id_str,
+                    "status": "consensus",
+                    "message": "Orchestrator started with consensus phase.",
+                    "requires_consensus": True
+                },
+            )
+
+        # No conflict - proceed with normal flow
+        # ALWAYS initialize phase_tracking for activity voting (even without conflicts)
+        phase_tracking = {
+            "current_phase": None,  # Will be set to activity_voting after destination research
+            "phases": {
+                "destination_decision": {
+                    "status": "completed",
+                    "started_at": None,
+                    "users_ready": [],
+                    "destination_options": []
+                },
+                "date_selection": {
+                    "status": "completed",
+                    "started_at": None,
+                    "date_options": []
+                },
+                "activity_voting": {
+                    "status": "pending",  # Will be set to active after activities generated
+                    "users_ready": []
+                },
+                "itinerary_approval": {
+                    "status": "pending",
+                    "users_ready": []
+                }
+            }
+        }
+        
+        # Update trip with aggregated values and phase tracking
         await trips_collection.update_one(
             {"_id": trip_doc["_id"]},
             {
@@ -630,6 +907,7 @@ async def trigger_all_in(body: AllInTripRequest):
                     "trip_duration_days": trip_duration_days,
                     "selected_dates": selected_dates,
                     "status": "planning",
+                    "phase_tracking": phase_tracking,
                     "updated_at": datetime.utcnow(),
                 }
             },
@@ -799,6 +1077,17 @@ async def trigger_all_in(body: AllInTripRequest):
             print(f"[all_in] Warning: preference aggregation or research failed: {e}")
             '''
 
+        # Broadcast to all users to navigate to chat BEFORE returning response
+        # This ensures other users receive the navigation message before the initiating user navigates
+        from app.router.chat import broadcast_to_chat
+        await broadcast_to_chat(trip_id_str, {
+            "type": "navigate_to_chat",
+            "trip_id": trip_id_str,
+            "message": "Let's Go! Planning has started.",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        print(f"[all_in] Broadcasted navigate_to_chat to all users in trip {trip_id_str}")
+
         # Start orchestrator in background
         asyncio.create_task(
             run_orchestrator_background(
@@ -857,4 +1146,352 @@ async def get_user_trips(
 
         return APIResponse(code=0, msg="ok", data=trips)
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+class MarkReadyRequest(BaseModel):
+    user_id: str
+    phase: str
+
+@router.post("/{trip_id}/phases/mark-ready", response_model=APIResponse)
+async def mark_user_ready(
+    trip_id: str,
+    request: MarkReadyRequest,
+):
+    """
+    Mark a user as ready to proceed from current phase.
+    This is triggered when user clicks "Voted" or "Approved" button.
+    When all users ready, triggers Consensus Agent.
+    """
+    user_id = request.user_id
+    phase = request.phase
+    try:
+        db = get_database()
+        trips_collection = db.trips
+        
+        # Find trip
+        try:
+            trip_doc = await trips_collection.find_one({"_id": ObjectId(trip_id)})
+        except:
+            trip_doc = await trips_collection.find_one({"trip_code": trip_id.upper()})
+        
+        if not trip_doc:
+            raise HTTPException(status_code=404, detail=f"Trip {trip_id} not found")
+        
+        # Get phase tracking
+        phase_tracking = trip_doc.get("phase_tracking", {})
+        phases = phase_tracking.get("phases", {})
+        
+        if phase not in phases:
+            raise HTTPException(status_code=400, detail=f"Invalid phase: {phase}")
+        
+        # Add user to users_ready list
+        phase_data = phases[phase]
+        users_ready = phase_data.get("users_ready", [])
+        
+        if user_id not in users_ready:
+            users_ready.append(user_id)
+        
+        # Update phase data
+        phase_data["users_ready"] = users_ready
+        phases[phase] = phase_data
+        phase_tracking["phases"] = phases
+        
+        # Check if all users ready
+        total_members = len(trip_doc.get("members", []))
+        all_ready = len(users_ready) >= total_members
+        
+        # Update in database
+        await trips_collection.update_one(
+            {"_id": trip_doc["_id"]},
+            {
+                "$set": {
+                    "phase_tracking": phase_tracking,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast update
+        from app.router.chat import broadcast_to_chat
+        await broadcast_to_chat(str(trip_doc["_id"]), {
+            "type": "phase_ready_update",
+            "phase": phase,
+            "user_id": user_id,
+            "users_ready": users_ready,  # Send full list
+            "total_users": total_members,
+            "all_ready": all_ready,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        # If all ready, trigger Consensus Agent
+        if all_ready:
+            print(f"[mark_user_ready] All users ready for phase {phase}, triggering Consensus Agent")
+            
+            # Import and run Consensus Agent
+            from app.agents.consensus_agent import ConsensusAgent
+            
+            consensus = ConsensusAgent()
+            initial_state = {
+                "trip_id": str(trip_doc["_id"]),
+                "agent_data": {},
+                "messages": []
+            }
+            
+            # Run in background
+            import asyncio
+            asyncio.create_task(consensus.run(initial_state))
+        
+        return APIResponse(
+            code=0,
+            msg="ok",
+            data={
+                "phase": phase,
+                "users_ready": len(users_ready),
+                "total_users": total_members,
+                "all_ready": all_ready
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[mark_user_ready] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{trip_id}/phases/unmark-ready", response_model=APIResponse)
+async def unmark_user_ready(
+    trip_id: str,
+    user_id: str,
+    phase: str,
+):
+    """
+    Remove user from ready list (allow toggle of Voted button).
+    """
+    try:
+        db = get_database()
+        trips_collection = db.trips
+        
+        # Find trip
+        try:
+            trip_doc = await trips_collection.find_one({"_id": ObjectId(trip_id)})
+        except:
+            trip_doc = await trips_collection.find_one({"trip_code": trip_id.upper()})
+        
+        if not trip_doc:
+            raise HTTPException(status_code=404, detail=f"Trip {trip_id} not found")
+        
+        # Get phase tracking
+        phase_tracking = trip_doc.get("phase_tracking", {})
+        phases = phase_tracking.get("phases", {})
+        
+        if phase not in phases:
+            raise HTTPException(status_code=400, detail=f"Invalid phase: {phase}")
+        
+        # Remove user from users_ready list
+        phase_data = phases[phase]
+        users_ready = phase_data.get("users_ready", [])
+        
+        if user_id in users_ready:
+            users_ready.remove(user_id)
+        
+        # Update phase data
+        phase_data["users_ready"] = users_ready
+        phases[phase] = phase_data
+        phase_tracking["phases"] = phases
+        
+        # Update in database
+        await trips_collection.update_one(
+            {"_id": trip_doc["_id"]},
+            {
+                "$set": {
+                    "phase_tracking": phase_tracking,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast update
+        total_members = len(trip_doc.get("members", []))
+        from app.router.chat import broadcast_to_chat
+        await broadcast_to_chat(str(trip_doc["_id"]), {
+            "type": "phase_ready_update",
+            "phase": phase,
+            "user_id": user_id,
+            "users_ready": len(users_ready),
+            "total_users": total_members,
+            "all_ready": False,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        return APIResponse(
+            code=0,
+            msg="ok",
+            data={
+                "phase": phase,
+                "users_ready": len(users_ready),
+                "total_users": total_members,
+                "all_ready": False
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[unmark_user_ready] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{trip_id}/vote")
+async def submit_vote(trip_id: str, vote: VoteRequest):
+    """
+    Submit a vote during a consensus phase (destination, dates, activities, etc.)
+    """
+    print(f"[submit_vote] Called for trip_id={trip_id}, user={vote.user_id}, phase={vote.phase}, options={vote.options}")
+    try:
+        db = get_database()
+        trips_collection = db.trips
+        
+        # Find trip
+        try:
+            trip_doc = await trips_collection.find_one({"_id": ObjectId(trip_id)})
+        except:
+            trip_doc = await trips_collection.find_one({"trip_code": trip_id.upper()})
+        
+        if not trip_doc:
+            raise HTTPException(status_code=404, detail="Trip not found")
+        
+        trip_id_str = str(trip_doc["_id"])
+        phase_tracking = trip_doc.get("phase_tracking", {})
+        phases = phase_tracking.get("phases", {})
+        
+        if vote.phase not in phases:
+            raise HTTPException(status_code=400, detail=f"Invalid phase: {vote.phase}")
+        
+        phase_data = phases[vote.phase]
+        options = phase_data.get("options", [])
+        
+        if not options:
+            raise HTTPException(status_code=400, detail="No voting options available for this phase")
+        
+        # Validate all selected options exist
+        valid_option_values = {opt["value"] for opt in options}
+        for selected_option in vote.options:
+            if selected_option not in valid_option_values:
+                raise HTTPException(status_code=400, detail=f"Invalid option: {selected_option}")
+        
+        # Remove user from all options first (clear previous votes)
+        for opt in options:
+            voters = opt.get("voters", [])
+            if vote.user_id in voters:
+                voters.remove(vote.user_id)
+                opt["voters"] = voters
+                opt["votes"] = len(voters)
+        
+        # Add user to all their selected options (multi-select support)
+        for opt in options:
+            if opt["value"] in vote.options:
+                voters = opt.get("voters", [])
+                if vote.user_id not in voters:
+                    voters.append(vote.user_id)
+                    opt["voters"] = voters
+                    opt["votes"] = len(voters)
+        
+        # Mark user as ready (voting = ready to proceed)
+        users_ready = phase_data.get("users_ready", [])
+        if vote.user_id not in users_ready:
+            users_ready.append(vote.user_id)
+        phase_data["users_ready"] = users_ready
+        
+        # Update database
+        phase_data["options"] = options
+        phases[vote.phase] = phase_data
+        
+        await trips_collection.update_one(
+            {"_id": trip_doc["_id"]},
+            {
+                "$set": {
+                    f"phase_tracking.phases.{vote.phase}.options": options,
+                    f"phase_tracking.phases.{vote.phase}.users_ready": users_ready,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        # Broadcast vote update to chat
+        from app.router.chat import broadcast_to_chat
+        await broadcast_to_chat(trip_id_str, {
+            "type": "vote_update",
+            "phase": vote.phase,
+            "options_selected": vote.options,  # Show which options user selected
+            "user_id": vote.user_id,
+            "options": options,  # Updated vote counts
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        # Check if all members have voted (track unique voters across all options)
+        all_voters = set()
+        for opt in options:
+            all_voters.update(opt.get("voters", []))
+        
+        total_members = len(trip_doc.get("members", []))
+        
+        if len(all_voters) >= total_members:
+            # All members voted - check if consensus already triggered
+            current_status = phase_data.get("status", "")
+            
+            if current_status == "active":
+                # Consensus already triggered by another concurrent request
+                print(f"[vote] All members voted but consensus already active for {vote.phase}")
+            else:
+                # First to complete voting - trigger consensus agent
+                print(f"[vote] All members voted on {vote.phase}, triggering consensus agent")
+                
+                # Update phase status to active so consensus agent will process it
+                await trips_collection.update_one(
+                    {"_id": trip_doc["_id"]},
+                    {"$set": {f"phase_tracking.phases.{vote.phase}.status": "active"}}
+                )
+                
+                # Trigger consensus in background (don't wait for it)
+                async def trigger_consensus_background():
+                    from app.agents.orchestrator_agent import run_orchestrator_agent
+                    from app.agents.agent_state import AgentState
+                    
+                    # Reload trip to get updated phase_tracking
+                    trip = await trips_collection.find_one({"_id": trip_doc["_id"]})
+                    phase_tracking = trip.get("phase_tracking", {})
+                    
+                    initial_state: AgentState = {
+                        "trip_id": trip_id_str,
+                        "goal": f"Resolve consensus for {vote.phase}",
+                        "agent_data": {
+                            "destination": trip.get("destination"),
+                            "trip_duration_days": trip.get("trip_duration_days"),
+                            "phase_tracking": phase_tracking,
+                        },
+                        "messages": [],
+                    }
+                    
+                    await run_orchestrator_agent(initial_state)
+                
+                # Fire and forget - don't await
+                asyncio.create_task(trigger_consensus_background())
+    
+        return APIResponse(
+            code=0,
+            msg="Vote recorded successfully",
+            data={
+                "phase": vote.phase,
+                "options": options,
+                "total_members": total_members,
+                "voted_members": len(all_voters)
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[submit_vote] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

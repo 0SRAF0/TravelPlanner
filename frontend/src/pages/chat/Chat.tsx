@@ -2,17 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
+import VotedButton from '../../components/phase/VotedButton';
 import { API } from '../../services/api';
 
 interface Message {
   senderId: string;
   senderName: string;
   content: string;
-  type: 'user' | 'ai' | 'agent_status';
+  type: 'user' | 'ai' | 'agent_status' | 'voting' | 'vote_update';
   timestamp: string;
   agent_name?: string;
   status?: string;
   step?: string;
+  phase?: string;
+  options?: Array<{ value: string; label: string; votes: number; voters: string[] }>;
 }
 
 interface AgentStatus {
@@ -33,6 +36,13 @@ export function Chat() {
   const [inputMessage, setInputMessage] = useState('');
   const [showHistory, setShowHistory] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState<string>('');
+  const [usersReady, setUsersReady] = useState<string[]>([]);
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [votingData, setVotingData] = useState<{ phase: string; options: any[] } | null>(null);
+  const [resolvedPhases, setResolvedPhases] = useState<Set<string>>(new Set());
+  const [votedPhases, setVotedPhases] = useState<Set<string>>(new Set());
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +86,15 @@ export function Chat() {
     ws.onopen = () => {
       console.log('[Chat] WebSocket connected');
       setIsConnected(true);
+      // Send a ping message to complete the WebSocket handshake loop on the backend
+      ws.send(
+        JSON.stringify({
+          type: 'ping',
+          senderId: currentUser.id || 'anonymous',
+          senderName: currentUser.name || 'Anonymous',
+          content: '',
+        }),
+      );
     };
 
     ws.onmessage = (event) => {
@@ -98,6 +117,72 @@ export function Chat() {
           }
           return [...prev, { ...message, step_history: [] }];
         });
+
+        // Trigger activity refresh when Destination Research Agent completes
+        if (
+          message.agent_name === 'Destination Research Agent' &&
+          message.status === 'completed' &&
+          message.step?.includes('activity suggestions')
+        ) {
+          console.log('[Chat] Activities ready, triggering refresh...');
+          setActivityRefreshKey((prev) => prev + 1);
+        }
+      }
+      // Handle phase ready updates
+      else if (message.type === 'phase_ready_update') {
+        setCurrentPhase(message.phase);
+        // usersReady is an array of user IDs who clicked "Voted"
+        const readyList = message.users_ready || [];
+        setUsersReady(Array.isArray(readyList) ? readyList : []);
+        setTotalUsers(message.total_users || 0);
+      }
+      // Handle voting messages
+      else if (message.type === 'voting') {
+        setVotingData({
+          phase: message.phase,
+          options: message.options || [],
+        });
+        setMessages((prev) => [...prev, message]);
+
+        // Update current phase when voting message arrives
+        if (message.phase) {
+          setCurrentPhase(message.phase);
+        }
+
+        // Check if current user has already voted in this phase
+        const hasVoted = message.options?.some((opt: any) => opt.voters?.includes(currentUser.id));
+        if (hasVoted && message.phase) {
+          setVotedPhases((prev) => new Set(prev).add(message.phase));
+        }
+      }
+      // Handle vote updates
+      else if (message.type === 'vote_update') {
+        if (votingData && votingData.phase === message.phase) {
+          setVotingData({
+            phase: message.phase,
+            options: message.options || [],
+          });
+        }
+        // Update vote counts in the voting message
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.type === 'voting' && msg.phase === message.phase
+              ? { ...msg, options: message.options || [] }
+              : msg,
+          ),
+        );
+      }
+      // Handle when a phase is resolved (destination selected, etc.)
+      else if (
+        message.content &&
+        (message.content.includes('Destination selected:') ||
+          message.content.includes('Voting complete!'))
+      ) {
+        // Mark the current voting phase as resolved
+        if (votingData?.phase) {
+          setResolvedPhases((prev) => new Set(prev).add(votingData.phase));
+        }
+        setMessages((prev) => [...prev, message]);
       } else {
         setMessages((prev) => [...prev, message]);
       }
@@ -143,6 +228,73 @@ export function Chat() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // Track user's current selections before submitting
+  const [userSelections, setUserSelections] = useState<{ [phase: string]: string[] }>({});
+
+  const toggleSelection = (option: string, phase: string) => {
+    setUserSelections((prev) => {
+      const current = prev[phase] || [];
+      if (current.includes(option)) {
+        // Remove selection
+        return { ...prev, [phase]: current.filter((o) => o !== option) };
+      } else {
+        // Add selection
+        return { ...prev, [phase]: [...current, option] };
+      }
+    });
+  };
+
+  const submitVote = async (phase: string) => {
+    console.log('[submitVote] Called with phase:', phase);
+    console.log('[submitVote] Current user:', currentUser.id);
+    console.log('[submitVote] Trip ID:', tripId);
+
+    if (!currentUser.id || !tripId || !phase) {
+      console.error('[submitVote] Missing required data');
+      return;
+    }
+
+    const selections = userSelections[phase] || [];
+    console.log('[submitVote] Selections:', selections);
+
+    if (selections.length === 0) {
+      console.warn('[submitVote] No selections made');
+      alert('Please select at least one option before voting.');
+      return;
+    }
+
+    console.log('[submitVote] Starting vote submission...');
+    try {
+      // Submit the vote selections (vote endpoint also marks user as ready)
+      const voteResponse = await fetch(API.trip.vote(tripId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          options: selections, // Submit all selected options
+          phase: phase,
+        }),
+      });
+
+      if (!voteResponse.ok) {
+        console.error('Failed to submit vote');
+        alert('Failed to submit vote. Please try again.');
+        return;
+      }
+
+      console.log(`✅ Submitted vote for ${selections.join(', ')} in phase ${phase}`);
+
+      // Mark phase as voted locally (disable the button)
+      setVotedPhases((prev) => new Set(prev).add(phase));
+
+      // Clear selections after successful submission
+      setUserSelections((prev) => ({ ...prev, [phase]: [] }));
+    } catch (error) {
+      console.error('Error submitting vote:', error);
+      alert('Failed to submit vote. Please try again.');
     }
   };
 
@@ -219,7 +371,7 @@ export function Chat() {
                   >
                     <div
                       className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                        msg.type === 'ai'
+                        msg.type === 'ai' || msg.type === 'voting'
                           ? 'bg-blue-100 border border-blue-300 text-left'
                           : msg.senderId === currentUser.id
                             ? 'bg-indigo-600 text-white text-left'
@@ -231,6 +383,74 @@ export function Chat() {
                         className="text-sm whitespace-pre-wrap text-left"
                         dangerouslySetInnerHTML={{ __html: renderMessageContent(msg.content) }}
                       />
+
+                      {/* Voting UI with multi-select and Done button - hide when phase is resolved */}
+                      {msg.type === 'voting' &&
+                        msg.options &&
+                        Array.isArray(msg.options) &&
+                        msg.phase &&
+                        !resolvedPhases.has(msg.phase) && (
+                          <div className="mt-3">
+                            <div className="space-y-2 mb-3">
+                              {msg.options.map((opt: any) => {
+                                const hasUserVoted = !!(msg.phase && votedPhases.has(msg.phase));
+                                const currentSelections = userSelections[msg.phase || ''] || [];
+                                const isSelected = currentSelections.includes(opt.value);
+                                const voteCount = opt.votes || 0;
+
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    onClick={() =>
+                                      !hasUserVoted && toggleSelection(opt.value, msg.phase || '')
+                                    }
+                                    disabled={hasUserVoted}
+                                    className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                      hasUserVoted
+                                        ? 'bg-gray-100 text-gray-500 border border-gray-300 cursor-not-allowed'
+                                        : isSelected
+                                          ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-500'
+                                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected || hasUserVoted}
+                                          disabled={hasUserVoted}
+                                          readOnly
+                                          className="w-4 h-4 text-indigo-600"
+                                        />
+                                        <span>{opt.label}</span>
+                                      </div>
+                                      <span className="text-xs text-gray-500">
+                                        {voteCount} {voteCount === 1 ? 'vote' : 'votes'}
+                                      </span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* Done button - separate from the Voted button in interactive space */}
+                            {msg.phase && (
+                              <div className="mt-3">
+                                <button
+                                  onClick={() => submitVote(msg.phase || '')}
+                                  disabled={votedPhases.has(msg.phase)}
+                                  className={`w-full px-4 py-2 rounded-lg font-medium transition-colors ${
+                                    votedPhases.has(msg.phase)
+                                      ? 'bg-gray-400 text-gray-700 cursor-not-allowed opacity-60'
+                                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                                  }`}
+                                >
+                                  {votedPhases.has(msg.phase) ? '✓ Done' : 'Done'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                       <p className="text-xs mt-1 opacity-60">
                         {new Date(msg.timestamp).toLocaleTimeString()}
                       </p>
@@ -262,15 +482,38 @@ export function Chat() {
           <div className="lg:col-span-3 flex flex-col gap-6">
             {/* Interactive Area - 70% */}
             <div className="flex-[7] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col min-h-0">
-              <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-                <h2 className="text-xl font-bold text-gray-900">Interactive Space</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Vote on activities, finalize plans, and collaborate with your travel group
-                </p>
+              <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Interactive Space</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Vote on activities, finalize plans, and collaborate with your travel group
+                  </p>
+                </div>
+                {/* Voted Button - Right side of header - Only show for activity_voting and itinerary_approval */}
+                {tripId &&
+                  (currentPhase === 'activity_voting' || currentPhase === 'itinerary_approval') && (
+                    <div className="ml-4">
+                      <VotedButton
+                        tripId={tripId}
+                        currentPhase={currentPhase}
+                        currentUserId={currentUser.id}
+                        usersReady={usersReady}
+                        totalUsers={totalUsers}
+                        buttonText={currentPhase === 'itinerary_approval' ? 'Approved' : 'Voted'}
+                        onStatusChange={(allReady: boolean) => {
+                          if (allReady) {
+                            console.log('All users ready! Phase can proceed.');
+                            // TODO: Trigger Consensus Agent to make decision
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 {tripId ? (
                   <ActivityList
+                    key={activityRefreshKey}
                     tripId={tripId}
                     limit={20}
                     cardWidthPx={320}
@@ -341,23 +584,14 @@ export function Chat() {
                           {/* Current step */}
                           <p className="text-sm mb-2 text-gray-700">{agent.step}</p>
 
-                          {/* Progress info */}
-                          {agent.progress && (
-                            <p className="text-xs opacity-75 mb-2 font-mono">
-                              {typeof agent.progress === 'number'
-                                ? `${agent.progress}%`
-                                : `${agent.progress.current}/${agent.progress.total}`}
-                            </p>
-                          )}
-
-                          {/* Progress bar */}
-                          {agent.status === 'running' && (
+                          {/* Progress bar - show for running agents */}
+                          {agent.status === 'running' && agent.progress && (
                             <div className="mt-2">
-                              <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
                                 <div
-                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out"
                                   style={{
-                                    width: `${progressPercent || 75}%`,
+                                    width: `${progressPercent || 10}%`,
                                   }}
                                 ></div>
                               </div>

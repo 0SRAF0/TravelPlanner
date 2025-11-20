@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from datetime import datetime
 from typing import Any, Literal
+import httpx
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -10,9 +13,51 @@ from langgraph.graph import END, StateGraph
 from pydantic.v1 import BaseModel, Field, validator
 
 from app.agents.agent_state import AgentState
-from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL
+from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL, GOOGLE_MAPS_API_KEY
 
 AGENT_LABEL = "destination_research"
+
+
+# ====== Photo Fetching Utility ======
+
+async def fetch_place_photo(place_name: str, destination: str) -> str | None:
+    """
+    Fetch a photo URL for a place using Google Places API.
+    Returns a photo URL or None if not found.
+    """
+    if not GOOGLE_MAPS_API_KEY:
+        return None
+    
+    try:
+        # Search for the place using Places API Text Search
+        search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+        search_params = {
+            "query": f"{place_name} {destination}",
+            "key": GOOGLE_MAPS_API_KEY,
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            search_response = await client.get(search_url, params=search_params)
+            search_data = search_response.json()
+            
+            if search_data.get("status") == "OK" and search_data.get("results"):
+                # Get the first result
+                place = search_data["results"][0]
+                photos = place.get("photos", [])
+                
+                if photos:
+                    # Get the photo reference from the first photo
+                    photo_reference = photos[0].get("photo_reference")
+                    
+                    if photo_reference:
+                        # Build the photo URL
+                        photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference={photo_reference}&key={GOOGLE_MAPS_API_KEY}"
+                        return photo_url
+        
+        return None
+    except Exception as e:
+        print(f"[destination_research] Failed to fetch photo for {place_name}: {e}")
+        return None
 
 
 # ====== Models ======
@@ -49,6 +94,7 @@ class Activity(BaseModel):
     fits: list[str] = Field(default_factory=list)
     score: float = 0.0
     rationale: str = ""
+    photo_url: str | None = None
 
 
 class ActivityCatalogOut(BaseModel):
@@ -173,7 +219,10 @@ class DestinationResearchAgent:
                 from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
 
                 self.llm = ChatGoogleGenerativeAI(
-                    model=GOOGLE_AI_MODEL, temperature=0, api_key=api_key
+                    model=GOOGLE_AI_MODEL, 
+                    temperature=0, 
+                    api_key=api_key,
+                    max_retries=0  # Disable LangChain's retry - we handle it in the agent
                 )
             except Exception:
                 # If client construction fails, continue without LLM; downstream will use fallback
@@ -257,7 +306,7 @@ class DestinationResearchAgent:
         return None
 
     # ---- Node ----
-    def _build_catalog(self, state: AgentState) -> AgentState:
+    async def _build_catalog(self, state: AgentState) -> AgentState:
         t0 = time.time()
         agent_data = dict(state.get("agent_data", {}) or {})
 
@@ -328,11 +377,43 @@ class DestinationResearchAgent:
             state["agent_data"] = agent_data
             return state
 
+        # Get broadcast callback if available
+        broadcast = state.get("broadcast_callback")
+        
         dest_key = dest.strip().lower()
         trip_id = ps.trip_id or (state.get("trip_id") or "trip")
         radius_km = float((hints or {}).get("radius_km", 10.0))
-        max_items = int((hints or {}).get("max_items", 20))
+        max_items = int((hints or {}).get("max_items", 15))
         preferred_categories = list((hints or {}).get("preferred_categories") or [])
+
+        # Broadcast starting status
+        if broadcast:
+            await broadcast("Destination Research Agent", "running", f"Geocoding destination: {dest}", progress={"current": 1, "total": 4})
+
+        # Actually geocode the destination
+        coords = DestinationResearchAgent._geocode_place(dest)
+        if not coords:
+            warnings.append(f"Could not geocode destination: {dest}")
+            insights.append("Try a more specific location like 'London, UK' or 'Tokyo, Japan'")
+            print(f"[ERROR] Geocoding failed for destination: {dest}")
+            out = ActivityCatalogOut(
+                activity_catalog=[],
+                insights=insights,
+                warnings=warnings,
+                metrics={
+                    "candidates_total": 0,
+                    "candidates_after_filters": 0,
+                    "final_selected": 0,
+                    "latency_ms": int((time.time() - t0) * 1000),
+                },
+                provenance=["geocoding_failed"],
+            )
+            agent_data.update(out.dict())
+            state["agent_data"] = agent_data
+            return state
+        
+        lat, lon = coords
+        print(f"[DEBUG] Geocoded {dest} to coordinates: ({lat}, {lon})")
 
         # Log start of generation with detailed context
         try:
@@ -414,11 +495,21 @@ class DestinationResearchAgent:
             state["agent_data"] = agent_data
             return state
 
+        # Broadcast searching status
+        if broadcast:
+            await broadcast("Destination Research Agent", "running", "Searching for nearby places and attractions", progress={"current": 2, "total": 4})
+        
+        # SINGLE LLM CALL PER TRIP: Generate all activities at once
+        # This is the only LLM call in destination research agent
         structured_llm = self.llm.with_structured_output(ActivityCatalogOut)
         run = prompt | structured_llm
         
-        # Retry logic with detailed logging
-        max_retries = 3
+        # Broadcast AI generation status
+        if broadcast:
+            await broadcast("Destination Research Agent", "running", "Generating activity descriptions with AI (1 LLM call)", progress={"current": 3, "total": 4})
+        
+        # Retry logic with detailed logging (max 2 attempts = max 2 API calls)
+        max_retries = 2
         result: ActivityCatalogOut | None = None
         last_error = None
         
@@ -450,7 +541,7 @@ class DestinationResearchAgent:
                     print(f"[ERROR] Cause: Network or API error")
                 
                 if api_attempt < max_retries:
-                    retry_delay = 2 ** api_attempt  # Exponential backoff: 2s, 4s, 8s
+                    retry_delay = 1.5  # Fixed 1.5s delay instead of exponential backoff
                     print(f"[RETRY] Waiting {retry_delay}s before retry...")
                     time.sleep(retry_delay)
                 else:
@@ -490,6 +581,10 @@ class DestinationResearchAgent:
         # Fill in missing trip_id and try to geocode coordinates for each activity.
         # If geocoding fails, default both to destination centroid for map visualization.
         centroid = DestinationResearchAgent._resolve_destination_centroid(dest)
+        
+        # Fetch photos for activities (async batch)
+        import asyncio
+        photo_tasks = []
         for a in selected:
             if getattr(a, "trip_id", None) in (None, ""):
                 a.trip_id = trip_id
@@ -504,6 +599,19 @@ class DestinationResearchAgent:
                 elif centroid is not None:
                     # Last resort: use destination centroid so map pins render
                     a.lat, a.lng = centroid
+            
+            # Fetch photo for this activity
+            photo_tasks.append(fetch_place_photo(getattr(a, "name", ""), dest))
+        
+        # Batch fetch all photos
+        if photo_tasks:
+            try:
+                photo_urls = await asyncio.gather(*photo_tasks, return_exceptions=True)
+                for i, photo_url in enumerate(photo_urls):
+                    if not isinstance(photo_url, Exception) and photo_url:
+                        selected[i].photo_url = photo_url
+            except Exception as e:
+                print(f"[destination_research] Failed to fetch photos: {e}")
 
         selected.sort(
             key=lambda a: (-float(getattr(a, "score", 0.0) or 0.0), getattr(a, "name", "").lower())
@@ -545,6 +653,49 @@ class DestinationResearchAgent:
             )
         )
 
+        # Activate activity_voting phase after generating activities
+        phase_tracking = agent_data.get("phase_tracking")
+        if phase_tracking:
+            phases = phase_tracking.get("phases", {})
+            if "activity_voting" in phases:
+                from bson import ObjectId
+                from app.db.database import get_database
+                
+                phases["activity_voting"]["status"] = "active"
+                phases["activity_voting"]["started_at"] = datetime.utcnow()
+                phase_tracking["current_phase"] = "activity_voting"
+                agent_data["phase_tracking"] = phase_tracking
+                state["agent_data"] = agent_data
+                
+                db = get_database()
+                trips = db.trips
+                await trips.update_one(
+                    {"_id": ObjectId(trip_id)},
+                    {
+                        "$set": {
+                            "phase_tracking": phase_tracking,
+                            "updated_at": datetime.utcnow()
+                        }
+                    }
+                )
+                print(f"[destination_research] Activated activity_voting phase for trip {trip_id}")
+                
+                # Broadcast phase activation to frontend
+                from app.router.chat import broadcast_to_chat
+                await broadcast_to_chat(trip_id, {
+                    "type": "phase_ready_update",
+                    "phase": "activity_voting",
+                    "users_ready": [],
+                    "total_users": len(ps.members),
+                    "all_ready": False,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+        
+        # Broadcast completion
+        if broadcast:
+            activity_count = len(out.activity_catalog)
+            await broadcast("Destination Research Agent", "completed", f"Generated {activity_count} activity suggestions - vote now!", progress={"current": 4, "total": 4})
+        
         # Log completion summary with detailed metrics
         try:
             total_latency = metrics.get('latency_ms', 0)

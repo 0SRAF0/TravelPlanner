@@ -214,18 +214,8 @@ class PreferenceAgent:
         # Build LangGraph app for this agent
         self.app = self._build_graph()
 
-    @property
-    def llm(self):
-        """Lazy-load LLM only when needed."""
-        if self._llm is None:
-            try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-
-                self._llm = ChatGoogleGenerativeAI(model=self.model_name)
-            except Exception:
-                # LLM not available, use without it
-                pass
-        return self._llm
+    # Note: PreferenceAgent does NOT use LLM - it only does aggregation and vector embeddings
+    # No LLM calls = no API quota usage for preference processing
 
     # ========== Vector Embedding Methods ==========
 
@@ -478,30 +468,38 @@ class PreferenceAgent:
             agent_data_out = dict(state.get("agent_data", {}) or {})
             agent_data_out["preferences_summary"] = preferences_summary
 
-            # If destination is missing, suggest and persist a fallback based on top vibe
+            # If destination is missing, suggest fallback ONLY if not in destination_decision phase
             current_destination = str(agent_data_out.get("destination") or "").strip()
+            phase_tracking = agent_data_out.get("phase_tracking", {})
+            current_phase = phase_tracking.get("current_phase")
+            
             if not current_destination:
-                # Determine top vibe
-                top_vibe = None
-                if aggregate.soft_mean:
-                    top_vibe = max(aggregate.soft_mean.items(), key=lambda kv: kv[1])[0]
-                # Simple mapping from top vibe to a reasonable default destination
-                vibe_to_destination = {
-                    "adventure": "Queenstown, New Zealand",
-                    "nature": "Banff, Canada",
-                    "food": "Tokyo, Japan",
-                    "culture": "Rome, Italy",
-                    "relax": "Bali, Indonesia",
-                    "nightlife": "Las Vegas, USA",
-                }
-                suggested_destination = vibe_to_destination.get(
-                    (top_vibe or "").lower(), "San Francisco, USA"
-                )
-                agent_data_out["destination"] = suggested_destination
-                print(
-                    f"[preference] No destination set; suggesting '{suggested_destination}'"
-                    + (f" based on top vibe '{top_vibe}'" if top_vibe else "")
-                )
+                # Don't suggest destination if we're in destination_decision phase (users are voting)
+                if current_phase == "destination_decision":
+                    print("[preference] No destination set, but destination_decision phase is active - waiting for consensus")
+                    agent_data_out["destination"] = None
+                else:
+                    # Determine top vibe
+                    top_vibe = None
+                    if aggregate.soft_mean:
+                        top_vibe = max(aggregate.soft_mean.items(), key=lambda kv: kv[1])[0]
+                    # Simple mapping from top vibe to a reasonable default destination
+                    vibe_to_destination = {
+                        "adventure": "Queenstown, New Zealand",
+                        "nature": "Banff, Canada",
+                        "food": "Tokyo, Japan",
+                        "culture": "Rome, Italy",
+                        "relax": "Bali, Indonesia",
+                        "nightlife": "Las Vegas, USA",
+                    }
+                    suggested_destination = vibe_to_destination.get(
+                        (top_vibe or "").lower(), "San Francisco, USA"
+                    )
+                    agent_data_out["destination"] = suggested_destination
+                    print(
+                        f"[preference] No destination set; suggesting '{suggested_destination}'"
+                        + (f" based on top vibe '{top_vibe}'" if top_vibe else "")
+                    )
                 # Best-effort: persist to trips collection
                 try:
                     db = get_database()

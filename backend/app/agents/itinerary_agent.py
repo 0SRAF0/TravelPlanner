@@ -117,7 +117,10 @@ class ItineraryAgent:
         if api_key:
             try:
                 self.llm = ChatGoogleGenerativeAI(
-                    model=GOOGLE_AI_MODEL, temperature=0.7, api_key=api_key
+                    model=GOOGLE_AI_MODEL, 
+                    temperature=0.7, 
+                    api_key=api_key,
+                    max_retries=0  # Disable LangChain's retry - we handle it in the agent
                 )
             except Exception:
                 self.llm = None
@@ -281,10 +284,12 @@ class ItineraryAgent:
             state["agent_data"] = agent_data
             return state
 
+        # SINGLE LLM CALL PER TRIP: Generate complete itinerary at once
+        # This is the only LLM call in itinerary agent
         structured_llm = self.llm.with_structured_output(ItineraryOut)
         run = prompt | structured_llm
         
-        # Retry logic with timing
+        # Retry logic with timing (max 3 attempts = max 3 API calls)
         max_retries = 3
         result: ItineraryOut | None = None
         last_error = None

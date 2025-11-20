@@ -27,6 +27,7 @@ class Activity(BaseModel):
     fits: list[str] = Field(default_factory=list, description="Member ids who likely enjoy this")
     score: float = Field(default=0.0, description="0..1 ranking score")
     rationale: str = Field(default="", description="Short explanation of the fit")
+    photo_url: str | None = Field(default=None, description="Google Places photo URL")
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
