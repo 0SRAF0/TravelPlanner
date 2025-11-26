@@ -183,9 +183,9 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
           >
             <div
               className={`max-w-[80%] rounded-2xl px-4 py-2 text-left ${message.role === 'user'
-                  ? 'bg-primary text-white'
-                  : 'bg-white text-gray-800 border border-gray-200'
-                }`}
+                ? 'bg-primary text-white'
+                : 'bg-white text-gray-800 border border-gray-200'
+              }`}
             >
               <p
                 className="text-sm whitespace-pre-wrap text-left leading-relaxed space-y-1"
@@ -288,8 +288,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
           >
             <FontAwesomeIcon
               icon={faPaperPlane}
-              className={`w-5 h-5 ${isLoading || !input.trim() ? 'opacity-50' : 'hover:opacity-90'
-                }`}
+              className={`w-5 h-5 ${isLoading || !input.trim() ? 'opacity-50' : 'hover:opacity-90'}`}
               style={{ color: 'var(--color-primary)' }}
             />
           </button>

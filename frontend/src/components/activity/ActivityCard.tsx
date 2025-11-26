@@ -73,7 +73,7 @@ export default function ActivityCard({
     <>
       {/* Simple Card */}
       <div
-        className={`transition-all duration-200 rounded-2xl shadow-md cursor-pointer select-none hover:shadow-xl hover:scale-[1.02] overflow-hidden ${
+        className={`transition-all duration-200 rounded-2xl shadow-md cursor-pointer select-none hover:shadow-xl hover:scale-[1.02] overflow-hidden h-full flex flex-col ${
           className || ''
         }`}
         style={{ backgroundColor: colorSet.primary }}
@@ -94,7 +94,7 @@ export default function ActivityCard({
           </div>
         )}
 
-        <div className="p-6 text-left flex flex-col" style={{ color: colorSet.secondary }}>
+        <div className="flex-1 p-6 text-left flex flex-col" style={{ color: colorSet.secondary }}>
           {/* Title */}
           <div className="flex-1 mb-4">
             <div className="text-xl font-extrabold leading-tight mb-2">{activity.name}</div>
@@ -103,7 +103,7 @@ export default function ActivityCard({
 
           {/* Vote Buttons - Large and Prominent */}
           <div
-            className="flex items-center justify-end gap-3 mt-2"
+            className="flex items-center justify-end gap-3 mt-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button

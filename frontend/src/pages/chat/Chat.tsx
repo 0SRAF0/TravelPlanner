@@ -4,6 +4,8 @@ import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
 import VotedButton from '../../components/phase/VotedButton';
 import { API } from '../../services/api';
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 
 interface Message {
   senderId: string;
@@ -44,7 +46,7 @@ export function Chat() {
   const [votedPhases, setVotedPhases] = useState<Set<string>>(new Set());
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
 
@@ -205,8 +207,11 @@ export function Chat() {
   }, [tripId]);
 
   useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Auto-scroll within the chat messages container only (avoid window scroll)
+    if (!messages.length) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
   const handleSendMessage = () => {
@@ -329,11 +334,12 @@ export function Chat() {
   };
 
   return (
-    <div className="min-h-screen py-8 px-4 bg-gray-50">
+    <div className="min-h-screen py-2 px-4">
       <div className="max-w-[1800px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex items-center justify-between">
-          <div>
+        <div className="grid grid-cols-3 items-center">
+          <div></div>
+          <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900">Group Trip Chat</h1>
             <p className="text-sm text-gray-600">
               {isConnected ? (
@@ -343,19 +349,21 @@ export function Chat() {
               )}
             </p>
           </div>
-          <Button text="Back to Trip" onClick={() => navigate(`/trip/${tripId}`)} />
+          <div className="justify-self-end">
+            <Button text="Back to Trip" onClick={() => navigate(`/trip/${tripId}`)} />
+          </div>
         </div>
 
         {/* Main Content - Split 40/60 for better interaction space */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-[calc(100vh-180px)]">
           {/* Left Side - Chat (40%) */}
-          <div className="lg:col-span-2 flex flex-col bg-white rounded-xl shadow-sm">
-            <div className="p-4 border-b bg-gradient-to-r from-indigo-50 to-blue-50">
+          <div className="lg:col-span-2 flex flex-col bg-white rounded-3xl shadow-sm">
+            <div className="p-4 bg-gradient-to-r ]">
               <h2 className="text-lg font-bold text-gray-900">Chat</h2>
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={messagesContainerRef}>
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <p className="text-lg">No messages yet</p>
@@ -458,7 +466,7 @@ export function Chat() {
                   </div>
                 ))
               )}
-              <div ref={messagesEndRef} />
+              <div />
             </div>
 
             {/* Input Area */}
@@ -473,7 +481,18 @@ export function Chat() {
                   rows={2}
                   disabled={!isConnected}
                 />
-                <Button text="Send" onClick={handleSendMessage} />
+                <button
+                  onClick={handleSendMessage}
+                  aria-label="Send message"
+                  title="Send"
+                  className="transition-colors mx-2 disabled:cursor-not-allowed text-xl"
+                >
+                  <FontAwesomeIcon
+                    icon={faPaperPlane}
+                    className="w-5 h-5 hover:opacity-90"
+                    style={{ color: 'var(--color-primary)' }}
+                  />
+                </button>
               </div>
             </div>
           </div>
@@ -481,9 +500,10 @@ export function Chat() {
           {/* Right Side - Interactive Space (70%) + Agent Status (30%) */}
           <div className="lg:col-span-3 flex flex-col gap-6">
             {/* Interactive Area - 70% */}
-            <div className="flex-[7] bg-white rounded-xl shadow-sm overflow-hidden flex flex-col min-h-0">
-              <div className="p-5 border-b bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
-                <div>
+            <div className=" ">
+              <div className="p-5 items-center">
+                <div></div>
+                <div className="text-center">
                   <h2 className="text-xl font-bold text-gray-900">Interactive Space</h2>
                   <p className="text-sm text-gray-600 mt-1">
                     Vote on activities, finalize plans, and collaborate with your travel group
@@ -492,7 +512,7 @@ export function Chat() {
                 {/* Voted Button - Right side of header - Only show for activity_voting and itinerary_approval */}
                 {tripId &&
                   (currentPhase === 'activity_voting' || currentPhase === 'itinerary_approval') && (
-                    <div className="ml-4">
+                    <div className="justify-self-end">
                       <VotedButton
                         tripId={tripId}
                         currentPhase={currentPhase}

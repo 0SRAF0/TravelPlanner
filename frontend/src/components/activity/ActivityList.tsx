@@ -210,14 +210,6 @@ export default function ActivityList({
 
   return (
     <div className={className}>
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-2 px-1">
-        <div className="text-left">
-          <div className="text-sm font-extrabold">Activities</div>
-          {category && <div className="text-xs opacity-60">{category}</div>}
-        </div>
-      </div>
-
       {/* Scroll container */}
       <div
         ref={containerRef}
