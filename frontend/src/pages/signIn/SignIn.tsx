@@ -42,8 +42,6 @@ export const SignIn = () => {
             <p className="text-gray-600">Sign in to start planning your next adventure</p>
           </div>
 
-          
-
           {/* Google Login Button */}
           <div className="space-y-4">
             <GoogleOAuth onError={handleError} />

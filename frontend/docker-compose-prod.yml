@@ -13,5 +13,5 @@ services:
       args:
         VITE_APP_API_BASE_URL: ${VITE_APP_API_BASE_URL}
         VITE_BUILD_MODE: prod
-    command: ["nginx", "-g", "daemon off;"]
+    command: ['nginx', '-g', 'daemon off;']
     restart: unless-stopped

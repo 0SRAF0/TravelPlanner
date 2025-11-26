@@ -4,8 +4,8 @@ import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
 import VotedButton from '../../components/phase/VotedButton';
 import { API } from '../../services/api';
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPaperPlane } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPaperPlane } from '@fortawesome/free-solid-svg-icons';
 
 interface Message {
   senderId: string;

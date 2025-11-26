@@ -89,7 +89,10 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
     try {
       // include current UI context (path) so assistant can provide contextual help
       const contextNote = `Current path: ${window.location.pathname}`;
-      const response = await chatBotService.sendMessage(`${text}\n\n${contextNote}`, messages.concat(userMessage));
+      const response = await chatBotService.sendMessage(
+        `${text}\n\n${contextNote}`,
+        messages.concat(userMessage),
+      );
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: response,
@@ -182,9 +185,10 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2 text-left ${message.role === 'user'
-                ? 'bg-primary text-white'
-                : 'bg-white text-gray-800 border border-gray-200'
+              className={`max-w-[80%] rounded-2xl px-4 py-2 text-left ${
+                message.role === 'user'
+                  ? 'bg-primary text-white'
+                  : 'bg-white text-gray-800 border border-gray-200'
               }`}
             >
               <p
