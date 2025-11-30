@@ -9,5 +9,5 @@ motor==3.7.1
 pymongo==4.15.3
 langchain-core==0.3.78
 langgraph==0.3.21
-langchain-google-genai==2.1.12
+langchain-openai==0.3.7
 websockets==15.0.1

@@ -73,16 +73,13 @@ def mock_llm():
 
 def _run_itinerary_agent_demo(mock_llm_instance: MagicMock) -> Dict[str, Any]:
     """Helper function to run the ItineraryAgent with a mock LLM."""
-    # Patch ChatGoogleGenerativeAI where it's imported in itinerary_agent.py
+    # Patch ChatOpenAI where it's imported in itinerary_agent.py
     # and also patch the API key to ensure the agent initializes correctly.
     with (
-        patch(
-            "app.agents.itinerary_agent.ChatGoogleGenerativeAI",
-            return_value=mock_llm_instance,
-        ),
+        patch("app.agents.itinerary_agent.ChatOpenAI", return_value=mock_llm_instance),
         # Patch the imported name inside itinerary_agent since it uses:
-        # from app.core.config import GOOGLE_AI_API_KEY
-        patch("app.agents.itinerary_agent.GOOGLE_AI_API_KEY", "mock_api_key"),
+        # from app.core.config import OPEN_AI_API_KEY
+        patch("app.agents.itinerary_agent.OPEN_AI_API_KEY", "mock_api_key"),
     ):
         agent = ItineraryAgent()
 

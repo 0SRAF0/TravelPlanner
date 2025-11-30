@@ -123,9 +123,9 @@ JWT_EXPIRATION_HOURS = _get_int_env("JWT_EXPIRATION_HOURS", 24)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4")
 
-# Google AI
-GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_AI_API_KEY")
-GOOGLE_AI_MODEL = "gemini-1.5-flash"  # 15 RPM limit vs gemini-2.5-flash's 10 RPM
+# Open AI
+OPEN_AI_API_KEY = (os.environ.get("OPEN_AI_API_KEY"))
+OPEN_AI_MODEL = os.environ.get("OPEN_AI_MODEL") or os.environ.get("OPENAI_MODEL", "gpt-4")
 
 # LangChain/LangSmith
 LANGCHAIN_API_KEY = os.environ.get("LANGCHAIN_API_KEY")

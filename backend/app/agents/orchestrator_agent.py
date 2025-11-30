@@ -1,5 +1,5 @@
 # orchestrator_agent.py - Multi-agent orchestrator for travel planner
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from pydantic.v1 import BaseModel, Field
@@ -9,7 +9,7 @@ from app.agents.destination_research_agent import DestinationResearchAgent
 from app.agents.itinerary_agent import ItineraryAgent
 from app.agents.preference_agent import PreferenceAgent
 from app.agents.consensus_agent import ConsensusAgent
-from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
+from app.core.config import OPEN_AI_MODEL, OPEN_AI_API_KEY
 
 # --- Instantiate agents ---
 preference_agent = PreferenceAgent()
@@ -44,12 +44,12 @@ WORKERS: dict[str, dict[str, str]] = {
 try:
     # Prefer explicit API key; avoid ADC requirement in local/dev
     llm = (
-        ChatGoogleGenerativeAI(
-            model=GOOGLE_AI_MODEL, 
-            api_key=GOOGLE_AI_API_KEY,
+        ChatOpenAI(
+            model=OPEN_AI_MODEL, 
+            api_key=OPEN_AI_API_KEY,
             max_retries=0  # Disable LangChain's retry - let agents handle retries
         )
-        if GOOGLE_AI_API_KEY
+        if OPEN_AI_API_KEY
         else None
     )
 except Exception:

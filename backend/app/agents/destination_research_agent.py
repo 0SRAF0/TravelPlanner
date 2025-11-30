@@ -13,7 +13,7 @@ from langgraph.graph import END, StateGraph
 from pydantic.v1 import BaseModel, Field, validator
 
 from app.agents.agent_state import AgentState
-from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL, GOOGLE_MAPS_API_KEY
+from app.core.config import OPEN_AI_API_KEY, OPEN_AI_MODEL, GOOGLE_MAPS_API_KEY
 
 AGENT_LABEL = "destination_research"
 
@@ -210,16 +210,16 @@ class DestinationResearchAgent:
     def __init__(self) -> None:
         self._cache: dict[str, ActivityCatalogOut] = {}
         # Prefer explicit API key; avoid constructing the client without it to prevent ADC requirement in local/test runs
-        api_key = GOOGLE_AI_API_KEY
+        api_key = OPEN_AI_API_KEY
         self.llm = None
         self._llm_unavailable_reason: str = ""
         if api_key:
             try:
                 # Import lazily
-                from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
+                from langchain_openai import ChatOpenAI  # type: ignore
 
-                self.llm = ChatGoogleGenerativeAI(
-                    model=GOOGLE_AI_MODEL, 
+                self.llm = ChatOpenAI(
+                    model=OPEN_AI_MODEL, 
                     temperature=0, 
                     api_key=api_key,
                     max_retries=0  # Disable LangChain's retry - we handle it in the agent
@@ -229,16 +229,16 @@ class DestinationResearchAgent:
                 self.llm = None
                 import traceback
 
-                if "langchain_google_genai" in str(traceback.format_exc()):
-                    self._llm_unavailable_reason = "langchain_google_genai not installed"
+                if "langchain_openai" in str(traceback.format_exc()):
+                    self._llm_unavailable_reason = "langchain_openai not installed"
                 else:
-                    self._llm_unavailable_reason = "Failed to initialize Google LLM client"
+                    self._llm_unavailable_reason = "Failed to initialize OpenAI client"
                 try:
                     self._llm_unavailable_reason += f": {traceback.format_exc(limit=1).strip()}"
                 except Exception:
                     pass
         else:
-            self._llm_unavailable_reason = "No API key found in GOOGLE_AI_API_KEY"
+            self._llm_unavailable_reason = "No API key found in OPEN_AI_API_KEY"
         self.app = self._build_graph()
 
     @staticmethod
@@ -516,10 +516,10 @@ class DestinationResearchAgent:
         for api_attempt in range(1, max_retries + 1):
             api_start = time.time()
             try:
-                print(f"[API] Calling Gemini API for activity generation (attempt {api_attempt}/{max_retries})...")
+                print(f"[API] Calling OpenAI API for activity generation (attempt {api_attempt}/{max_retries})...")
                 result = run.invoke({"payload": payload})
                 api_latency = (time.time() - api_start) * 1000
-                print(f"[API] ✅ Gemini API call succeeded")
+                print(f"[API] ✅ OpenAI API call succeeded")
                 print(f"[PERF] API latency: {api_latency:.2f}ms")
                 print(f"[PERF] Activities generated: {len(result.activity_catalog)}")
                 break  # Success, exit retry loop
@@ -527,7 +527,7 @@ class DestinationResearchAgent:
                 api_latency = (time.time() - api_start) * 1000
                 last_error = e
                 err_text = f"{type(e).__name__}: {e}"
-                print(f"[API] ❌ Gemini API call failed after {api_latency:.2f}ms")
+                print(f"[API] ❌ OpenAI API call failed after {api_latency:.2f}ms")
                 print(f"[ERROR] Attempt {api_attempt}/{max_retries}")
                 print(f"[ERROR] Error type: {type(e).__name__}")
                 print(f"[ERROR] Error message: {str(e)}")

@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from app.core.config import GOOGLE_AI_API_KEY, GOOGLE_AI_MODEL, JWT_ALGORITHM, JWT_SECRET
+from app.core.config import OPEN_AI_API_KEY, OPEN_AI_MODEL, JWT_ALGORITHM, JWT_SECRET
 from app.models.common import APIResponse
 
 router = APIRouter(prefix="/chatbot", tags=["Chatbot"])
@@ -33,20 +33,20 @@ async def chat(request: ChatRequest, user_id: str = Depends(get_current_user_id)
     """
     Chat endpoint for AI travel planning assistant.
 
-    Uses Google Gemini to provide conversational assistance for travel planning.
+    Uses OpenAI to provide conversational assistance for travel planning.
     """
-    if not GOOGLE_AI_API_KEY:
+    if not OPEN_AI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="AI service is not configured. Please set GOOGLE_AI_API_KEY environment variable.",
+            detail="AI service is not configured. Please set OPEN_AI_API_KEY environment variable.",
         )
 
     try:
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_openai import ChatOpenAI
 
-        llm = ChatGoogleGenerativeAI(
-            model=GOOGLE_AI_MODEL, temperature=0.7, api_key=GOOGLE_AI_API_KEY
+        llm = ChatOpenAI(
+            model=OPEN_AI_MODEL, temperature=0.7, api_key=OPEN_AI_API_KEY
         )
 
         # Build conversation context

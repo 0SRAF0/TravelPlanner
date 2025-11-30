@@ -5,14 +5,13 @@ from pydantic.v1 import BaseModel, Field, validator
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-import os
+from langchain_openai import ChatOpenAI
 import time
 import json
 
 from app.agents.agent_state import AgentState
 from app.agents.destination_research_agent import Activity, PreferencesSummaryIn
-from app.core.config import GOOGLE_AI_MODEL, GOOGLE_AI_API_KEY
+from app.core.config import OPEN_AI_MODEL, OPEN_AI_API_KEY
 
 
 AGENT_LABEL = "itinerary"
@@ -111,13 +110,13 @@ Rules:
 class ItineraryAgent:
     def __init__(self) -> None:
         self._cache: Dict[str, ItineraryOut] = {}
-        api_key = GOOGLE_AI_API_KEY
+        api_key = OPEN_AI_API_KEY
         self.llm = None
         self._llm_unavailable_reason: str = ""
         if api_key:
             try:
-                self.llm = ChatGoogleGenerativeAI(
-                    model=GOOGLE_AI_MODEL, 
+                self.llm = ChatOpenAI(
+                    model=OPEN_AI_MODEL, 
                     temperature=0.7, 
                     api_key=api_key,
                     max_retries=0  # Disable LangChain's retry - we handle it in the agent
@@ -126,13 +125,13 @@ class ItineraryAgent:
                 self.llm = None
                 import traceback
 
-                self._llm_unavailable_reason = "Failed to initialize Google LLM client"
+                self._llm_unavailable_reason = "Failed to initialize OpenAI client"
                 try:
                     self._llm_unavailable_reason += f": {traceback.format_exc(limit=1).strip()}"
                 except Exception:
                     pass
         else:
-            self._llm_unavailable_reason = "No API key found in GOOGLE_AI_API_KEY"
+            self._llm_unavailable_reason = "No API key found in OPEN_AI_API_KEY"
         self.app = self._build_graph()
 
     # ---- Node ----
@@ -297,10 +296,10 @@ class ItineraryAgent:
         for attempt in range(1, max_retries + 1):
             api_start = time.time()
             try:
-                print(f"[API] Calling Gemini API for itinerary generation (attempt {attempt}/{max_retries})...")
+                print(f"[API] Calling OpenAI API for itinerary generation (attempt {attempt}/{max_retries})...")
                 result = run.invoke({"payload": payload})
                 api_latency = (time.time() - api_start) * 1000
-                print(f"[API] ✅ Gemini API call succeeded")
+                print(f"[API] ✅ OpenAI API call succeeded")
                 print(f"[PERF] API latency: {api_latency:.2f}ms")
                 print(f"[PERF] Days generated: {len(result.itinerary)}")
                 break  # Success
@@ -308,7 +307,7 @@ class ItineraryAgent:
                 api_latency = (time.time() - api_start) * 1000
                 last_error = e
                 err_text = f"{type(e).__name__}: {e}"
-                print(f"[API] ❌ Gemini API call failed after {api_latency:.2f}ms")
+                print(f"[API] ❌ OpenAI API call failed after {api_latency:.2f}ms")
                 print(f"[ERROR] Attempt {attempt}/{max_retries}")
                 print(f"[ERROR] Error type: {type(e).__name__}")
                 print(f"[ERROR] Error message: {str(e)}")
