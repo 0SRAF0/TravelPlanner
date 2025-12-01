@@ -162,9 +162,9 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-20 right-6 w-96 h-[600px] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col z-50 mb-4">
+    <div className="fixed bottom-20 right-6 w-96 h-[600px] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col z-50 mb-4 min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-accent to-primary rounded-t-3xl">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-accent to-primary rounded-t-3xl flex-shrink-0">
         <div className="flex items-center space-x-2">
           <h3 className="text-white font-semibold">AI Travel Assistant</h3>
         </div>
@@ -178,7 +178,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 min-h-0">
         {messages.map((message, index) => (
           <div
             key={index}
@@ -270,7 +270,7 @@ export const ChatBox = ({ isOpen, onClose }: ChatBoxProps) => {
       </div>
 
       {/* Input */}
-      <div className="p-4 rounded-b-lg">
+      <div className="p-4 rounded-b-lg flex-shrink-0">
         <div className="flex space-x-2 items-center">
           <div className="flex-1">
             <Input

@@ -364,19 +364,19 @@ export function Chat() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-[calc(100vh-180px)]">
           {/* Left Side - Chat (40%) */}
           <div
-            className="lg:col-span-2 flex flex-col bg-white/50 backdrop-blur-lg rounded-3xl shadow-2xl ring-1 ring-white/40 z-20"
+            className="lg:col-span-2 flex flex-col bg-white/50 backdrop-blur-lg rounded-3xl shadow-2xl ring-1 ring-white/40 z-20 min-h-0"
             style={{
               backgroundColor: 'rgba(255, 255, 255, 0.5)',
               backdropFilter: 'saturate(180%) blur(12px)',
               WebkitBackdropFilter: 'saturate(180%) blur(12px)',
             }}
           >
-            <div className="p-4 bg-gradient-to-r ]">
+            <div className="p-4 bg-gradient-to-r flex-shrink-0">
               <h2 className="text-lg font-bold text-gray-900">Chat</h2>
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={messagesContainerRef}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" ref={messagesContainerRef}>
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <p className="text-lg">No messages yet</p>
@@ -483,7 +483,7 @@ export function Chat() {
             </div>
 
             {/* Input Area */}
-            <div className="border-t p-4">
+            <div className="border-t p-4 flex-shrink-0">
               <div className="flex gap-2">
                 <textarea
                   value={inputMessage}
