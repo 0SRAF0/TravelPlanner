@@ -29,6 +29,15 @@ class Activity(BaseModel):
     rationale: str = Field(default="", description="Short explanation of the fit")
     photo_url: str | None = Field(default=None, description="Google Places photo URL")
 
+    # Voting data (persisted)
+    votes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-user vote map, values are 'up' | 'down'",
+    )
+    upvote_count: int = Field(default=0, description="Total upvotes")
+    downvote_count: int = Field(default=0, description="Total downvotes")
+    net_score: int = Field(default=0, description="upvote_count - downvote_count")
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -46,5 +55,10 @@ class Activity(BaseModel):
                 "fits": ["u5", "u6"],
                 "score": 0.9,
                 "rationale": "Iconic urban experience matching adventure and culture vibes.",
+                "photo_url": "https://example.com/photo.jpg",
+                "votes": {"u5": "up", "u6": "down"},
+                "upvote_count": 1,
+                "downvote_count": 1,
+                "net_score": 0,
             }
         }
