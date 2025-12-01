@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import type { Activity } from '../../types/activity';
 import Modal from '../modal/Modal';
 import GoogleMapEmbed from '../map/GoogleMapEmbed';
+import { authService } from '../../services/authService';
 
 type ColorSet = { primary: string; secondary: string };
 
@@ -55,6 +56,26 @@ export default function ActivityCard({
   const [showModal, setShowModal] = useState(false);
   const [lastVote, setLastVote] = useState<'up' | 'down' | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Rehydrate user's previous vote from persisted activity.votes
+  useEffect(() => {
+    try {
+      const user = authService.getUser() || JSON.parse(localStorage.getItem('user_info') || '{}');
+      const uid = user?.id;
+      if (!uid) {
+        setLastVote(null);
+        return;
+      }
+      const prevVote = (activity as any)?.votes?.[uid];
+      if (prevVote === 'up' || prevVote === 'down') {
+        setLastVote(prevVote);
+      } else {
+        setLastVote(null);
+      }
+    } catch {
+      setLastVote(null);
+    }
+  }, [activity]);
 
   // Preload image on mount
   useEffect(() => {

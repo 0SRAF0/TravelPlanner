@@ -129,6 +129,70 @@ export function Chat() {
     loadMessages();
   }, [tripId]);
 
+  // Rehydrate phase + ready state from backend on load/refresh
+  useEffect(() => {
+    if (!tripId) return;
+    const loadPhaseState = async () => {
+      try {
+        const res = await fetch(`${API.trip.get}?trip_id=${tripId}`);
+        const json = await res.json();
+        if (json?.code !== 0 || !json?.data) return;
+        const trip = json.data || {};
+        const members: string[] = Array.isArray(trip.members) ? trip.members : [];
+        setTotalUsers(members.length || 0);
+
+        const phaseTracking = trip.phase_tracking || {};
+        const phases = phaseTracking.phases || {};
+
+        // Prefer server-declared current phase; otherwise infer one that looks active
+        let phase: string =
+          phaseTracking.current_phase ||
+          Object.entries(phases).find(
+            // status can be 'pending' | 'in_progress' | 'voting_in_progress' | 'active' | 'completed'
+            ([, p]: any) =>
+              p &&
+              ['voting_in_progress', 'active', 'pending', 'in_progress'].includes(
+                (p.status as string) || '',
+              ),
+          )?.[0] ||
+          '';
+
+        if (!phase) return;
+
+        setCurrentPhase(phase);
+        const phaseData = phases[phase] || {};
+
+        // Ready list
+        const readyList: string[] = Array.isArray(phaseData.users_ready)
+          ? phaseData.users_ready
+          : [];
+        setUsersReady(readyList);
+
+        // Carry over local voted state if user already voted/marked ready previously
+        const options: any[] = Array.isArray(phaseData.options) ? phaseData.options : [];
+        const userHasVoted =
+          readyList.includes(currentUser.id) ||
+          options.some((opt) => Array.isArray(opt?.voters) && opt.voters.includes(currentUser.id));
+        if (userHasVoted) {
+          setVotedPhases((prev) => new Set(prev).add(phase));
+        }
+
+        // Seed voting data so live vote updates can merge cleanly
+        if (options.length > 0) {
+          setVotingData({ phase, options });
+        }
+
+        // Track resolved phases
+        if (phaseData.status === 'completed') {
+          setResolvedPhases((prev) => new Set(prev).add(phase));
+        }
+      } catch (err) {
+        console.error('[Chat] Failed to load trip/phase state:', err);
+      }
+    };
+    loadPhaseState();
+  }, [tripId]);
+
   useEffect(() => {
     if (!tripId) return;
 
@@ -580,9 +644,8 @@ export function Chat() {
                     Vote on activities, finalize plans, and collaborate with your travel group
                   </p>
                 </div>
-                {/* Voted Button - Right side of header - Only show for activity_voting and itinerary_approval */}
-                {tripId &&
-                  (currentPhase === 'activity_voting' || currentPhase === 'itinerary_approval') && (
+                {/* Voted Button - show whenever there's an active phase */}
+                {tripId && currentPhase && (
                     <div className="justify-self-end">
                       <VotedButton
                         tripId={tripId}
