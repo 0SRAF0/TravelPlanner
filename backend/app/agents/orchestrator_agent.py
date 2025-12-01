@@ -389,6 +389,25 @@ async def preference_agent_wrapper(state: AgentState) -> AgentState:
 
 async def destination_research_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running destination_research_agent...")
+    # Explicitly broadcast a starting status to guarantee UI updates
+    try:
+        from app.router.chat import broadcast_to_chat
+        trip_id = state.get("trip_id")
+        dest_name = (state.get("agent_data") or {}).get("destination") or "destination"
+        if trip_id:
+            await broadcast_to_chat(
+                str(trip_id),
+                {
+                    "type": "agent_status",
+                    "agent_name": "Destination Research Agent",
+                    "status": "starting",
+                    "step": f"Preparing to research {dest_name}",
+                    "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+                },
+            )
+    except Exception as _broadcast_err:
+        # Non-fatal - continue even if we can't broadcast early status
+        print(f"[destination_research_agent_wrapper] Warning: failed to broadcast starting status: {_broadcast_err}")
     result = await destination_research_agent.app.ainvoke(state)
     print("[AGENT] destination_research_agent completed.")
     
@@ -453,6 +472,23 @@ async def destination_research_agent_wrapper(state: AgentState) -> AgentState:
             if docs:
                 res = await col.insert_many(docs)
                 print(f"[orchestrator] ✅ Saved {len(res.inserted_ids)} activities to database for trip {trip_id}")
+                
+                # Broadcast a guaranteed 'completed' status so UI reflects completion
+                try:
+                    from app.router.chat import broadcast_to_chat
+                    await broadcast_to_chat(
+                        str(trip_id),
+                        {
+                            "type": "agent_status",
+                            "agent_name": "Destination Research Agent",
+                            "status": "completed",
+                            "step": f"Generated {len(res.inserted_ids)} activity suggestions",
+                            "timestamp": __import__('datetime').datetime.utcnow().isoformat(),
+                            "progress": {"current": 4, "total": 4},
+                        },
+                    )
+                except Exception as _broadcast_err:
+                    print(f"[orchestrator] Warning: failed to broadcast destination research completion: {_broadcast_err}")
                 
                 # Initialize activity_voting phase
                 from app.db.database import get_database

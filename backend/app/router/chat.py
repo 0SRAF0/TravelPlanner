@@ -180,7 +180,7 @@ async def broadcast_to_chat(chat_id: str, message_data: dict):
         print(f"[broadcast] Updated voting options for phase {phase} in database")
     
     # Save new messages to database for persistence
-    elif msg_type in ['ai', 'voting', 'change_request', 'system']:
+    elif msg_type in ['ai', 'voting', 'change_request', 'system', 'agent_status']:
       # Prepare message document
       message_doc = {
         "chatId": chat_id,
@@ -198,6 +198,12 @@ async def broadcast_to_chat(chat_id: str, message_data: dict):
       elif msg_type == "change_request":
         message_doc["message_id"] = message_data.get("message_id")
         message_doc["change_data"] = message_data.get("change_data", {})
+      elif msg_type == "agent_status":
+        message_doc["agent_name"] = message_data.get("agent_name")
+        message_doc["status"] = message_data.get("status")
+        message_doc["step"] = message_data.get("step")
+        message_doc["progress"] = message_data.get("progress")
+        message_doc["elapsed_seconds"] = message_data.get("elapsed_seconds")
       
       await messages_collection.insert_one(message_doc)
       print(f"[broadcast] Saved {msg_type} message to database for chat {chat_id}")
@@ -252,6 +258,8 @@ async def get_chat_messages(
         formatted_msg["agent_name"] = msg.get("agent_name")
         formatted_msg["status"] = msg.get("status")
         formatted_msg["step"] = msg.get("step")
+        formatted_msg["progress"] = msg.get("progress")
+        formatted_msg["elapsed_seconds"] = msg.get("elapsed_seconds")
       
       formatted_messages.append(formatted_msg)
     
