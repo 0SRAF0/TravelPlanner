@@ -78,6 +78,27 @@ export function Chat() {
     return out;
   };
 
+  // Load historical messages on mount
+  useEffect(() => {
+    if (!tripId) return;
+
+    const loadMessages = async () => {
+      try {
+        const response = await fetch(API.chat.messages(tripId));
+        const data = await response.json();
+        
+        if (data.code === 0 && data.data?.messages) {
+          console.log(`[Chat] Loaded ${data.data.messages.length} historical messages`);
+          setMessages(data.data.messages);
+        }
+      } catch (error) {
+        console.error('[Chat] Failed to load historical messages:', error);
+      }
+    };
+
+    loadMessages();
+  }, [tripId]);
+
   useEffect(() => {
     if (!tripId) return;
 
@@ -191,9 +212,16 @@ export function Chat() {
           setResolvedPhases((prev) => new Set(prev).add(votingData.phase));
         }
         setMessages((prev) => [...prev, message]);
-      } else {
+      }
+      // Only add messages with actual content to display
+      else if (
+        message.content &&
+        message.content.trim() !== '' &&
+        (message.type === 'user' || message.type === 'ai')
+      ) {
         setMessages((prev) => [...prev, message]);
       }
+      // Ignore other message types (ping, system messages, etc.)
     };
 
     ws.onerror = (error) => {
