@@ -610,18 +610,19 @@ async def trigger_all_in(body: AllInTripRequest):
         if not trip_doc:
             raise HTTPException(status_code=404, detail=f"Trip {body.trip_id} not found")
         
-        # Check if orchestrator already running
+        # Check if orchestrator already started previously
         orchestrator_status = trip_doc.get("orchestrator_status")
-        if orchestrator_status == "running":
-            print(f"[all_in] Orchestrator already running for trip {body.trip_id}, skipping duplicate trigger")
+        trip_status = trip_doc.get("status")
+        if orchestrator_status in ["running", "paused", "completed"] or trip_status in ["planning", "consensus"]:
+            print(f"[all_in] Orchestrator already started for trip {body.trip_id} (orchestrator_status={orchestrator_status}, trip_status={trip_status}). Skipping duplicate trigger.")
             trip_id_str = str(trip_doc["_id"])
             return APIResponse(
                 code=0,
                 msg="ok",
                 data={
                     "trip_id": trip_id_str,
-                    "status": "already_running",
-                    "message": "Planning already started by another user.",
+                    "status": "already_started",
+                    "message": "Planning already started.",
                 },
             )
         
