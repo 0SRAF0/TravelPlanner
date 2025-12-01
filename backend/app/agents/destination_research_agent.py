@@ -358,9 +358,11 @@ class DestinationResearchAgent:
                 coverage=1.0,
             )
 
-        if not ps.ready_for_planning or not ps.members:
-            warnings.append("Not ready for planning or no members")
-            insights.append("Collect preferences from all members first")
+        # Only hard-stop if we truly have no members.
+        # If preferences are incomplete or have conflicts, proceed best-effort with a warning
+        if not ps.members:
+            warnings.append("No members found for this trip")
+            insights.append("Collect preferences from members to improve suggestions")
             out = ActivityCatalogOut(
                 activity_catalog=[],
                 insights=insights,
@@ -376,6 +378,8 @@ class DestinationResearchAgent:
             agent_data.update(out.dict())
             state["agent_data"] = agent_data
             return state
+        if not ps.ready_for_planning:
+            warnings.append("Preferences incomplete or conflicts detected; generating best-effort suggestions")
 
         # Get broadcast callback if available
         broadcast = state.get("broadcast_callback")
@@ -393,27 +397,12 @@ class DestinationResearchAgent:
         # Actually geocode the destination
         coords = DestinationResearchAgent._geocode_place(dest)
         if not coords:
-            warnings.append(f"Could not geocode destination: {dest}")
+            warnings.append(f"Could not geocode destination: {dest} (continuing without coordinates)")
             insights.append("Try a more specific location like 'London, UK' or 'Tokyo, Japan'")
-            print(f"[ERROR] Geocoding failed for destination: {dest}")
-            out = ActivityCatalogOut(
-                activity_catalog=[],
-                insights=insights,
-                warnings=warnings,
-                metrics={
-                    "candidates_total": 0,
-                    "candidates_after_filters": 0,
-                    "final_selected": 0,
-                    "latency_ms": int((time.time() - t0) * 1000),
-                },
-                provenance=["geocoding_failed"],
-            )
-            agent_data.update(out.dict())
-            state["agent_data"] = agent_data
-            return state
-        
-        lat, lon = coords
-        print(f"[DEBUG] Geocoded {dest} to coordinates: ({lat}, {lon})")
+            print(f"[WARN] Geocoding failed for destination: {dest} - proceeding without coordinates")
+        else:
+            lat, lon = coords
+            print(f"[DEBUG] Geocoded {dest} to coordinates: ({lat}, {lon})")
 
         # Log start of generation with detailed context
         try:

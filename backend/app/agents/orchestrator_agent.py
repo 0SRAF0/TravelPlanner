@@ -121,6 +121,12 @@ def _needs_consensus(state: AgentState) -> bool:
         phase_data = phases[current_phase]
         status = phase_data.get("status")
         print(f"[orchestrator] Phase '{current_phase}' has status: {status}")
+        # Special handling: for phases that require user action (e.g., activity_voting),
+        # avoid tight loops. The consensus agent will be triggered by user actions.
+        if current_phase in ["activity_voting", "itinerary_approval"]:
+            if status in ["active", "voting_in_progress", "pending"]:
+                print(f"[orchestrator] ⏸️ {current_phase} awaiting user actions - orchestrator will pause")
+                return False
         # Only trigger consensus if status is "active" (not "voting_in_progress" or "completed")
         result = status == "active"
         if result:
@@ -200,6 +206,35 @@ def _needs_itinerary_generation(state: AgentState) -> bool:
     
     return result
 
+def _is_waiting_for_user_action(state: AgentState) -> tuple[bool, str]:
+    """
+    Detect situations where the orchestrator should pause and wait
+    for users instead of continuing (to avoid LLM fallback).
+    """
+    agent_data = state.get("agent_data", {}) or {}
+    phase_tracking = agent_data.get("phase_tracking") or {}
+    phases = phase_tracking.get("phases", {}) or {}
+    current_phase = phase_tracking.get("current_phase")
+    # When a current phase exists and is in a waiting status, pause
+    if current_phase:
+        status = (phases.get(current_phase) or {}).get("status", "")
+        if status in ["voting_in_progress", "pending", "active"]:
+            if current_phase == "destination_decision" and status == "voting_in_progress":
+                return True, "Waiting for destination votes"
+            if current_phase == "date_selection" and status == "voting_in_progress":
+                return True, "Waiting for date votes"
+            # Treat 'pending' as waiting as well because phase has been created but users haven't started
+            if current_phase == "activity_voting" and status in ["pending", "active", "voting_in_progress"]:
+                return True, "Waiting for activity votes"
+            if current_phase == "itinerary_approval" and status in ["pending", "active", "voting_in_progress"]:
+                return True, "Waiting for itinerary approvals"
+    else:
+        # If no current phase but activity voting exists and isn't completed yet, pause
+        av_status = (phases.get("activity_voting") or {}).get("status")
+        if av_status in ["pending", "active", "voting_in_progress"]:
+            return True, "Waiting for activity voting to start/complete"
+    return False, ""
+
 
 def supervisor_agent(state: AgentState) -> AgentState:
     """Supervisor node: decides which agent to run next."""
@@ -256,6 +291,25 @@ def supervisor_agent(state: AgentState) -> AgentState:
 History:
 {history_text}
 """
+
+    # If there is no deterministic next task AND we are waiting for user action,
+    # pause without calling the LLM. Do NOT pause if there is work to do
+    # (e.g., destination_researcher should run before activity voting).
+    if not deterministic_suggestion:
+        waiting, waiting_reason = _is_waiting_for_user_action(state)
+        if waiting:
+            print(f"\n[SUPERVISOR - Step {steps}]")
+            print(f"  Next task: end")
+            print(f"  Reason: {waiting_reason}")
+            print(f"  Deterministic suggestion: None (paused)")
+            print(f"  State snapshot: {snapshot}")
+            return {
+                "next_task": "end",
+                "reason": waiting_reason,
+                "steps": steps,
+                # Not done: we are pausing for user input
+                "done": False,
+            }
 
     # If LLM unavailable OR we have a clear deterministic path, use it directly
     if llm is None or deterministic_suggestion:
@@ -357,19 +411,40 @@ async def destination_research_agent_wrapper(state: AgentState) -> AgentState:
             docs = []
             for a in activities:
                 try:
+                    # Normalize to dict from either Pydantic model or plain dict
+                    if hasattr(a, "model_dump"):
+                        a_dict = a.model_dump()  # type: ignore[attr-defined]
+                    elif isinstance(a, dict):
+                        a_dict = dict(a)
+                    else:
+                        # Fallback: attempt attribute access
+                        a_dict = {
+                            "trip_id": getattr(a, "trip_id", None),
+                            "name": getattr(a, "name", None),
+                            "category": getattr(a, "category", None),
+                            "rough_cost": getattr(a, "rough_cost", None),
+                            "duration_min": getattr(a, "duration_min", None),
+                            "lat": getattr(a, "lat", None),
+                            "lng": getattr(a, "lng", None),
+                            "tags": list(getattr(a, "tags", []) or []),
+                            "fits": list(getattr(a, "fits", []) or []),
+                            "score": getattr(a, "score", 0.0),
+                            "rationale": getattr(a, "rationale", ""),
+                            "photo_url": getattr(a, "photo_url", None),
+                        }
                     doc = Activity(
-                        trip_id=str(a.get("trip_id") or trip_id),
-                        name=str(a.get("name", "")),
-                        category=str(a.get("category", "Other")),
-                        rough_cost=a.get("rough_cost"),
-                        duration_min=a.get("duration_min"),
-                        lat=a.get("lat"),
-                        lng=a.get("lng"),
-                        tags=list(a.get("tags") or []),
-                        fits=list(a.get("fits") or []),
-                        score=float(a.get("score") or 0.0),
-                        rationale=str(a.get("rationale") or ""),
-                        photo_url=a.get("photo_url"),
+                        trip_id=str(a_dict.get("trip_id") or trip_id),
+                        name=str(a_dict.get("name", "")),
+                        category=str(a_dict.get("category", "Other")),
+                        rough_cost=a_dict.get("rough_cost"),
+                        duration_min=a_dict.get("duration_min"),
+                        lat=a_dict.get("lat"),
+                        lng=a_dict.get("lng"),
+                        tags=list(a_dict.get("tags") or []),
+                        fits=list(a_dict.get("fits") or []),
+                        score=float(a_dict.get("score") or 0.0),
+                        rationale=str(a_dict.get("rationale") or ""),
+                        photo_url=a_dict.get("photo_url"),
                     )
                     docs.append(doc.model_dump())
                 except Exception as e:
@@ -394,32 +469,45 @@ async def destination_research_agent_wrapper(state: AgentState) -> AgentState:
                         phase_tracking = trip_doc.get("phase_tracking", {})
                         phases = phase_tracking.get("phases", {})
                         
-                        # Initialize activity_voting phase
-                        phases["activity_voting"] = {
-                            "status": "pending",
-                            "created_at": datetime.utcnow(),
-                            "description": "Members vote on suggested activities"
-                        }
+                        # Initialize activity_voting phase only if it doesn't exist yet
+                        if "activity_voting" not in phases:
+                            phases["activity_voting"] = {
+                                "status": "pending",
+                                "created_at": datetime.utcnow(),
+                                "description": "Members vote on suggested activities"
+                            }
                         
                         # Only update the activity_voting phase, DON'T change current_phase
                         # The current_phase should remain on destination/date consensus until those are resolved
-                        await trips.update_one(
-                            {"_id": ObjectId(trip_id)},
-                            {
-                                "$set": {
-                                    "phase_tracking.phases.activity_voting": phases["activity_voting"],
-                                    "updated_at": datetime.utcnow()
+                        # Only write if we actually created it to avoid overwriting an active phase
+                        if "activity_voting" in phases and not trip_doc.get("phase_tracking", {}).get("phases", {}).get("activity_voting"):
+                            await trips.update_one(
+                                {"_id": ObjectId(trip_id)},
+                                {
+                                    "$set": {
+                                        "phase_tracking.phases.activity_voting": phases["activity_voting"],
+                                        "updated_at": datetime.utcnow()
+                                    }
                                 }
-                            }
-                        )
+                            )
                         
                         # Update agent_data with phase_tracking but preserve current_phase
-                        existing_phase_tracking = agent_data.get("phase_tracking", {})
-                        agent_data["phase_tracking"] = {
-                            "current_phase": existing_phase_tracking.get("current_phase"),
-                            "phases": phases
-                        }
-                        result["agent_data"] = agent_data
+                        # Respect any phase_tracking already set by the agent (e.g., set to active)
+                        if not agent_data.get("phase_tracking"):
+                            agent_data["phase_tracking"] = {
+                                "current_phase": phase_tracking.get("current_phase"),
+                                "phases": phases
+                            }
+                            result["agent_data"] = agent_data
+                        else:
+                            # Merge in activity_voting phase if we added it and it's missing
+                            ad_pt = agent_data.get("phase_tracking") or {}
+                            ad_phases = ad_pt.get("phases") or {}
+                            if "activity_voting" not in ad_phases and "activity_voting" in phases:
+                                ad_phases["activity_voting"] = phases["activity_voting"]
+                                ad_pt["phases"] = ad_phases
+                                agent_data["phase_tracking"] = ad_pt
+                                result["agent_data"] = agent_data
                         
                         print(f"[orchestrator] ✅ Initialized activity_voting phase (status: pending)")
                 except Exception as e:

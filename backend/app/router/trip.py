@@ -152,12 +152,12 @@ async def run_orchestrator_background(
 
         result = await run_orchestrator_agent(initial_state)
         
-        # After orchestrator completes, update with activity count
+        # After orchestrator returns, decide whether we're DONE or PAUSED waiting for users
         agent_data_out = (result or {}).get("agent_data", {}) or {}
         activities = agent_data_out.get("activity_catalog", []) or []
         activity_count = len(activities)
         
-        # Only broadcast completion if we got results
+        # Only broadcast destination research completion if we got results
         if activities:
             await broadcast_agent_status(
                 "Destination Research Agent", "completed", f"Generated {activity_count} activity suggestions", progress={"current": 4, "total": 4}
@@ -203,42 +203,107 @@ async def run_orchestrator_background(
         except Exception as e:
             print(f"[orchestrator_background] ⚠️ Warning: failed to save activities after orchestrator: {e}")
 
-        # Update status: completed
-        await broadcast_agent_status("Orchestrator", "completed", f"Trip planning complete! {activity_count} activities ready", progress=100)
-
-        # Send completion message
-        success_msg = f"✅ Trip planning complete!\nSteps taken: {result.get('steps', 0)}\nStatus: {result.get('reason', 'Done')}"
-        await messages_collection.insert_one(
-            {
-                "chatId": trip_id,
-                "senderId": "system",
-                "senderName": "AI Assistant",
-                "content": success_msg,
-                "type": "ai",
-                "createdAt": datetime.utcnow(),
-            }
-        )
-
-        await broadcast_to_chat(
-            trip_id,
-            {
-                "senderId": "system",
-                "senderName": "AI Assistant",
-                "content": success_msg,
-                "type": "ai",
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        )
-
-        # Clear orchestrator running flag
-        db = get_database()
+        # Inspect current phase to determine pause vs completion
         trips_collection = db.trips
-        await trips_collection.update_one(
-            {"_id": ObjectId(trip_id)},
-            {"$set": {"orchestrator_status": "completed", "updated_at": datetime.utcnow()}}
-        )
+        try:
+            trip_after = await trips_collection.find_one({"_id": ObjectId(trip_id)})
+        except:
+            trip_after = await trips_collection.find_one({"trip_code": trip_id.upper()})
         
-        print(f"[orchestrator_background] Completed for trip {trip_id}")
+        phase_tracking_out = (trip_after or {}).get("phase_tracking", {}) if trip_after else {}
+        phases_out = phase_tracking_out.get("phases", {}) if phase_tracking_out else {}
+        current_phase_out = phase_tracking_out.get("current_phase")
+        
+        waiting_phase = None
+        waiting_status = None
+        if current_phase_out:
+            st = (phases_out.get(current_phase_out) or {}).get("status")
+            if st in ["active", "voting_in_progress", "pending"]:
+                waiting_phase = current_phase_out
+                waiting_status = st
+        else:
+            # Even if no current_phase, activity_voting may still be open
+            av_status = (phases_out.get("activity_voting") or {}).get("status")
+            if av_status in ["pending", "active", "voting_in_progress"]:
+                waiting_phase = "activity_voting"
+                waiting_status = av_status
+        
+        if waiting_phase:
+            # Broadcast paused state instead of completed
+            # Compute readiness if available
+            users_ready = (phases_out.get(waiting_phase) or {}).get("users_ready", [])
+            total_members = len((trip_after or {}).get("members", []))
+            pretty_phase = {
+                "destination_decision": "destination voting",
+                "date_selection": "date voting",
+                "activity_voting": "activity voting",
+                "itinerary_approval": "itinerary approval",
+            }.get(waiting_phase, waiting_phase)
+            step_msg = f"Waiting for {pretty_phase} ({len(users_ready)}/{total_members} ready)"
+            await broadcast_agent_status("Orchestrator", "paused", step_msg)
+            
+            # Inform chat and set orchestrator status to paused
+            paused_msg = f"⏸️ Paused: {step_msg}\nI’ll resume automatically when everyone is done."
+            await messages_collection.insert_one(
+                {
+                    "chatId": trip_id,
+                    "senderId": "system",
+                    "senderName": "AI Assistant",
+                    "content": paused_msg,
+                    "type": "ai",
+                    "createdAt": datetime.utcnow(),
+                }
+            )
+            await broadcast_to_chat(
+                trip_id,
+                {
+                    "senderId": "system",
+                    "senderName": "AI Assistant",
+                    "content": paused_msg,
+                    "type": "ai",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            )
+            await trips_collection.update_one(
+                {"_id": ObjectId(trip_id)},
+                {"$set": {"orchestrator_status": "paused", "updated_at": datetime.utcnow()}}
+            )
+            print(f"[orchestrator_background] Paused for trip {trip_id}: {step_msg}")
+        else:
+            # Update status: completed
+            await broadcast_agent_status("Orchestrator", "completed", f"Trip planning complete! {activity_count} activities ready", progress=100)
+            
+            # Send completion message
+            success_msg = f"✅ Trip planning complete!\nSteps taken: {result.get('steps', 0)}\nStatus: {result.get('reason', 'Done')}"
+            await messages_collection.insert_one(
+                {
+                    "chatId": trip_id,
+                    "senderId": "system",
+                    "senderName": "AI Assistant",
+                    "content": success_msg,
+                    "type": "ai",
+                    "createdAt": datetime.utcnow(),
+                }
+            )
+            
+            await broadcast_to_chat(
+                trip_id,
+                {
+                    "senderId": "system",
+                    "senderName": "AI Assistant",
+                    "content": success_msg,
+                    "type": "ai",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            )
+            
+            # Clear orchestrator running flag
+            await trips_collection.update_one(
+                {"_id": ObjectId(trip_id)},
+                {"$set": {"orchestrator_status": "completed", "updated_at": datetime.utcnow()}}
+            )
+            
+            print(f"[orchestrator_background] Completed for trip {trip_id}")
 
     except Exception as e:
         # Detailed error logging for devs
