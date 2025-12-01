@@ -1,7 +1,8 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query
 from typing import Dict, List
 from datetime import datetime
 from app.db.database import get_database
+from app.models.common import APIResponse
 
 async def handle_heyai_command(message: str, user_id: str, trip_id: str):
     """
@@ -158,10 +159,59 @@ active_connections: Dict[str, List[WebSocket]] = {}
 async def broadcast_to_chat(chat_id: str, message_data: dict):
   """
   Broadcast a message to all connected clients in a specific chat.
+  Also saves the message to database for persistence.
   Can be called from other modules (e.g., orchestrator).
   """
+  # Save message to database (except for status-only messages)
+  msg_type = message_data.get('type', 'unknown')
+  
+  try:
+    db = get_database()
+    messages_collection = db.messages
+    
+    # Handle vote_update - update existing voting message
+    if msg_type == 'vote_update':
+      phase = message_data.get("phase")
+      if phase:
+        await messages_collection.update_one(
+          {"chatId": chat_id, "type": "voting", "phase": phase},
+          {"$set": {"options": message_data.get("options", [])}}
+        )
+        print(f"[broadcast] Updated voting options for phase {phase} in database")
+    
+    # Save new messages to database for persistence
+    elif msg_type in ['ai', 'voting', 'change_request', 'system', 'agent_status']:
+      # Prepare message document
+      message_doc = {
+        "chatId": chat_id,
+        "senderId": message_data.get("senderId", "system"),
+        "senderName": message_data.get("senderName", "AI Assistant"),
+        "content": message_data.get("content", ""),
+        "type": msg_type,
+        "createdAt": datetime.utcnow()
+      }
+      
+      # Add type-specific fields
+      if msg_type == "voting":
+        message_doc["phase"] = message_data.get("phase")
+        message_doc["options"] = message_data.get("options", [])
+      elif msg_type == "change_request":
+        message_doc["message_id"] = message_data.get("message_id")
+        message_doc["change_data"] = message_data.get("change_data", {})
+      elif msg_type == "agent_status":
+        message_doc["agent_name"] = message_data.get("agent_name")
+        message_doc["status"] = message_data.get("status")
+        message_doc["step"] = message_data.get("step")
+        message_doc["progress"] = message_data.get("progress")
+        message_doc["elapsed_seconds"] = message_data.get("elapsed_seconds")
+      
+      await messages_collection.insert_one(message_doc)
+      print(f"[broadcast] Saved {msg_type} message to database for chat {chat_id}")
+  except Exception as e:
+    print(f"[broadcast] Warning: Failed to save/update message in database: {e}")
+  
+  # Broadcast to connected clients
   if chat_id in active_connections:
-    msg_type = message_data.get('type', 'unknown')
     print(f"[broadcast] Broadcasting {msg_type} to {len(active_connections[chat_id])} clients in chat {chat_id}")
     for connection in active_connections[chat_id]:
       try:
@@ -169,7 +219,63 @@ async def broadcast_to_chat(chat_id: str, message_data: dict):
       except Exception as e:
         print(f"[broadcast] Failed to send to connection: {e}")
   else:
-    print(f"[broadcast] No active connections for chat {chat_id}, message not sent")
+    print(f"[broadcast] No active connections for chat {chat_id}, message saved to DB but not broadcast")
+
+
+@router.get("/messages/{chat_id}", response_model=APIResponse)
+async def get_chat_messages(
+    chat_id: str,
+    limit: int = Query(default=100, description="Number of messages to return")
+):
+  """
+  Fetch historical chat messages for a specific trip/chat.
+  Returns messages sorted by creation time (oldest first).
+  """
+  try:
+    db = get_database()
+    messages_collection = db.messages
+    
+    # Query messages for this chat
+    cursor = messages_collection.find({"chatId": chat_id}).sort("createdAt", 1).limit(limit)
+    messages = await cursor.to_list(length=limit)
+    
+    # Format messages for frontend
+    formatted_messages = []
+    for msg in messages:
+      formatted_msg = {
+        "senderId": msg.get("senderId"),
+        "senderName": msg.get("senderName"),
+        "content": msg.get("content", ""),
+        "type": msg.get("type", "user"),
+        "timestamp": msg.get("createdAt").isoformat() if msg.get("createdAt") else datetime.utcnow().isoformat()
+      }
+      
+      # Include additional fields for specific message types
+      if msg.get("type") == "voting":
+        formatted_msg["phase"] = msg.get("phase")
+        formatted_msg["options"] = msg.get("options", [])
+      elif msg.get("type") == "agent_status":
+        formatted_msg["agent_name"] = msg.get("agent_name")
+        formatted_msg["status"] = msg.get("status")
+        formatted_msg["step"] = msg.get("step")
+        formatted_msg["progress"] = msg.get("progress")
+        formatted_msg["elapsed_seconds"] = msg.get("elapsed_seconds")
+      
+      formatted_messages.append(formatted_msg)
+    
+    print(f"[get_chat_messages] Returning {len(formatted_messages)} messages for chat {chat_id}")
+    
+    return APIResponse(
+      code=0,
+      msg=f"Retrieved {len(formatted_messages)} messages",
+      data={"messages": formatted_messages}
+    )
+    
+  except Exception as e:
+    print(f"[get_chat_messages] Error: {e}")
+    import traceback
+    traceback.print_exc()
+    raise HTTPException(status_code=500, detail=f"Failed to fetch messages: {str(e)}")
 
 
 @router.websocket("/{chat_id}")

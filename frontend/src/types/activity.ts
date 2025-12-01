@@ -11,6 +11,11 @@ export interface Activity {
   score: number; // 0..1
   rationale: string;
   photo_url?: string | null;
+  // Voting fields (optional in older data)
+  votes?: Record<string, 'up' | 'down'>;
+  upvote_count?: number;
+  downvote_count?: number;
+  net_score?: number;
   created_at?: string;
   updated_at?: string;
 }

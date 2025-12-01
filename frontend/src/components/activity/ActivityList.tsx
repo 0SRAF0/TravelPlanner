@@ -127,6 +127,31 @@ export default function ActivityList({
             // Could trigger navigation or notification here
           }
         }
+
+        // Listen for activity vote updates in real-time
+        if (message.type === 'activity_vote_update') {
+          console.log('[ActivityList] Vote update received:', {
+            activity_name: message.activity_name,
+            vote: message.vote,
+            net_score: message.net_score,
+            upvote_count: message.upvote_count,
+            downvote_count: message.downvote_count,
+          });
+          
+          // Update the activity in the local state
+          setActivities((prevActivities) =>
+            prevActivities.map((activity) =>
+              activity.name === message.activity_name
+                ? {
+                    ...activity,
+                    net_score: message.net_score,
+                    upvote_count: message.upvote_count,
+                    downvote_count: message.downvote_count,
+                  }
+                : activity
+            )
+          );
+        }
       } catch (error) {
         console.error('[ActivityList] WebSocket message parse error:', error);
       }

@@ -78,6 +78,121 @@ export function Chat() {
     return out;
   };
 
+  // Load historical messages on mount
+  useEffect(() => {
+    if (!tripId) return;
+
+    const loadMessages = async () => {
+      try {
+        const response = await fetch(API.chat.messages(tripId));
+        const data = await response.json();
+        
+        if (data.code === 0 && data.data?.messages) {
+          console.log(`[Chat] Loaded ${data.data.messages.length} historical messages`);
+          
+          // Separate agent_status messages from regular messages
+          const regularMessages = [];
+          const agentStatusMap = new Map<string, AgentStatus>();
+          
+          for (const msg of data.data.messages) {
+            if (msg.type === 'agent_status') {
+              // Keep only the latest status for each agent
+              const agentName = msg.agent_name;
+              if (agentName) {
+                agentStatusMap.set(agentName, {
+                  agent_name: agentName,
+                  status: msg.status,
+                  step: msg.step,
+                  timestamp: msg.timestamp,
+                  progress: msg.progress,
+                  elapsed_seconds: msg.elapsed_seconds,
+                  step_history: []
+                });
+              }
+            } else {
+              regularMessages.push(msg);
+            }
+          }
+          
+          // Update states
+          setMessages(regularMessages);
+          if (agentStatusMap.size > 0) {
+            setAgentStatuses(Array.from(agentStatusMap.values()));
+            console.log(`[Chat] Loaded ${agentStatusMap.size} agent statuses`);
+          }
+        }
+      } catch (error) {
+        console.error('[Chat] Failed to load historical messages:', error);
+      }
+    };
+
+    loadMessages();
+  }, [tripId]);
+
+  // Rehydrate phase + ready state from backend on load/refresh
+  useEffect(() => {
+    if (!tripId) return;
+    const loadPhaseState = async () => {
+      try {
+        const res = await fetch(`${API.trip.get}?trip_id=${tripId}`);
+        const json = await res.json();
+        if (json?.code !== 0 || !json?.data) return;
+        const trip = json.data || {};
+        const members: string[] = Array.isArray(trip.members) ? trip.members : [];
+        setTotalUsers(members.length || 0);
+
+        const phaseTracking = trip.phase_tracking || {};
+        const phases = phaseTracking.phases || {};
+
+        // Prefer server-declared current phase; otherwise infer one that looks active
+        let phase: string =
+          phaseTracking.current_phase ||
+          Object.entries(phases).find(
+            // status can be 'pending' | 'in_progress' | 'voting_in_progress' | 'active' | 'completed'
+            ([, p]: any) =>
+              p &&
+              ['voting_in_progress', 'active', 'pending', 'in_progress'].includes(
+                (p.status as string) || '',
+              ),
+          )?.[0] ||
+          '';
+
+        if (!phase) return;
+
+        setCurrentPhase(phase);
+        const phaseData = phases[phase] || {};
+
+        // Ready list
+        const readyList: string[] = Array.isArray(phaseData.users_ready)
+          ? phaseData.users_ready
+          : [];
+        setUsersReady(readyList);
+
+        // Carry over local voted state if user already voted/marked ready previously
+        const options: any[] = Array.isArray(phaseData.options) ? phaseData.options : [];
+        const userHasVoted =
+          readyList.includes(currentUser.id) ||
+          options.some((opt) => Array.isArray(opt?.voters) && opt.voters.includes(currentUser.id));
+        if (userHasVoted) {
+          setVotedPhases((prev) => new Set(prev).add(phase));
+        }
+
+        // Seed voting data so live vote updates can merge cleanly
+        if (options.length > 0) {
+          setVotingData({ phase, options });
+        }
+
+        // Track resolved phases
+        if (phaseData.status === 'completed') {
+          setResolvedPhases((prev) => new Set(prev).add(phase));
+        }
+      } catch (err) {
+        console.error('[Chat] Failed to load trip/phase state:', err);
+      }
+    };
+    loadPhaseState();
+  }, [tripId]);
+
   useEffect(() => {
     if (!tripId) return;
 
@@ -191,9 +306,16 @@ export function Chat() {
           setResolvedPhases((prev) => new Set(prev).add(votingData.phase));
         }
         setMessages((prev) => [...prev, message]);
-      } else {
+      }
+      // Only add messages with actual content to display
+      else if (
+        message.content &&
+        message.content.trim() !== '' &&
+        (message.type === 'user' || message.type === 'ai')
+      ) {
         setMessages((prev) => [...prev, message]);
       }
+      // Ignore other message types (ping, system messages, etc.)
     };
 
     ws.onerror = (error) => {
@@ -364,19 +486,19 @@ export function Chat() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-[calc(100vh-180px)]">
           {/* Left Side - Chat (40%) */}
           <div
-            className="lg:col-span-2 flex flex-col bg-white/50 backdrop-blur-lg rounded-3xl shadow-2xl ring-1 ring-white/40 z-20"
+            className="lg:col-span-2 flex flex-col bg-white/50 backdrop-blur-lg rounded-3xl shadow-2xl ring-1 ring-white/40 z-20 min-h-0"
             style={{
               backgroundColor: 'rgba(255, 255, 255, 0.5)',
               backdropFilter: 'saturate(180%) blur(12px)',
               WebkitBackdropFilter: 'saturate(180%) blur(12px)',
             }}
           >
-            <div className="p-4 bg-gradient-to-r ]">
+            <div className="p-4 bg-gradient-to-r flex-shrink-0">
               <h2 className="text-lg font-bold text-gray-900">Chat</h2>
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={messagesContainerRef}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" ref={messagesContainerRef}>
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <p className="text-lg">No messages yet</p>
@@ -483,7 +605,7 @@ export function Chat() {
             </div>
 
             {/* Input Area */}
-            <div className="border-t p-4">
+            <div className="border-t p-4 flex-shrink-0">
               <div className="flex gap-2">
                 <textarea
                   value={inputMessage}
@@ -522,9 +644,8 @@ export function Chat() {
                     Vote on activities, finalize plans, and collaborate with your travel group
                   </p>
                 </div>
-                {/* Voted Button - Right side of header - Only show for activity_voting and itinerary_approval */}
-                {tripId &&
-                  (currentPhase === 'activity_voting' || currentPhase === 'itinerary_approval') && (
+                {/* Voted Button - show whenever there's an active phase */}
+                {tripId && currentPhase && (
                     <div className="justify-self-end">
                       <VotedButton
                         tripId={tripId}

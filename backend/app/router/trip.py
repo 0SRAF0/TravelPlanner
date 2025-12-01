@@ -81,19 +81,7 @@ async def run_orchestrator_background(
     # Send initial status
     await broadcast_agent_status("Orchestrator", "starting", "Initializing trip planning")
 
-    # Send initial message to chat
-    await messages_collection.insert_one(
-        {
-            "chatId": trip_id,
-            "senderId": "system",
-            "senderName": "AI Assistant",
-            "content": f"🚀 Starting trip planning...\nDestination: {destination or 'TBD'}\nDuration: {trip_duration_days} days\nDates: {selected_dates or 'Flexible'}",
-            "type": "ai",
-            "createdAt": datetime.utcnow(),
-        }
-    )
-
-    # Broadcast to active WebSocket connections
+    # Send initial message to chat (broadcast_to_chat now handles database save)
     from app.router.chat import broadcast_to_chat
 
     await broadcast_to_chat(
@@ -242,18 +230,8 @@ async def run_orchestrator_background(
             step_msg = f"Waiting for {pretty_phase} ({len(users_ready)}/{total_members} ready)"
             await broadcast_agent_status("Orchestrator", "paused", step_msg)
             
-            # Inform chat and set orchestrator status to paused
-            paused_msg = f"⏸️ Paused: {step_msg}\nI’ll resume automatically when everyone is done."
-            await messages_collection.insert_one(
-                {
-                    "chatId": trip_id,
-                    "senderId": "system",
-                    "senderName": "AI Assistant",
-                    "content": paused_msg,
-                    "type": "ai",
-                    "createdAt": datetime.utcnow(),
-                }
-            )
+            # Inform chat and set orchestrator status to paused (broadcast_to_chat now handles database save)
+            paused_msg = f"⏸️ Paused: {step_msg}\nI'll resume automatically when everyone is done."
             await broadcast_to_chat(
                 trip_id,
                 {
@@ -273,19 +251,8 @@ async def run_orchestrator_background(
             # Update status: completed
             await broadcast_agent_status("Orchestrator", "completed", f"Trip planning complete! {activity_count} activities ready", progress=100)
             
-            # Send completion message
+            # Send completion message (broadcast_to_chat now handles database save)
             success_msg = f"✅ Trip planning complete!\nSteps taken: {result.get('steps', 0)}\nStatus: {result.get('reason', 'Done')}"
-            await messages_collection.insert_one(
-                {
-                    "chatId": trip_id,
-                    "senderId": "system",
-                    "senderName": "AI Assistant",
-                    "content": success_msg,
-                    "type": "ai",
-                    "createdAt": datetime.utcnow(),
-                }
-            )
-            
             await broadcast_to_chat(
                 trip_id,
                 {
@@ -330,16 +297,7 @@ async def run_orchestrator_background(
             await broadcast_agent_status("Orchestrator", "error", f"Error: {str(e)[:50]}")
 
         error_msg = f"❌ {user_error}\nPlease try again or contact support if the issue persists."
-        await messages_collection.insert_one(
-            {
-                "chatId": trip_id,
-                "senderId": "system",
-                "senderName": "AI Assistant",
-                "content": error_msg,
-                "type": "ai",
-                "createdAt": datetime.utcnow(),
-            }
-        )
+        # Message will be saved by broadcast_to_chat below
         
         # Clear orchestrator running flag on error
         db = get_database()
@@ -652,18 +610,19 @@ async def trigger_all_in(body: AllInTripRequest):
         if not trip_doc:
             raise HTTPException(status_code=404, detail=f"Trip {body.trip_id} not found")
         
-        # Check if orchestrator already running
+        # Check if orchestrator already started previously
         orchestrator_status = trip_doc.get("orchestrator_status")
-        if orchestrator_status == "running":
-            print(f"[all_in] Orchestrator already running for trip {body.trip_id}, skipping duplicate trigger")
+        trip_status = trip_doc.get("status")
+        if orchestrator_status in ["running", "paused", "completed"] or trip_status in ["planning", "consensus"]:
+            print(f"[all_in] Orchestrator already started for trip {body.trip_id} (orchestrator_status={orchestrator_status}, trip_status={trip_status}). Skipping duplicate trigger.")
             trip_id_str = str(trip_doc["_id"])
             return APIResponse(
                 code=0,
                 msg="ok",
                 data={
                     "trip_id": trip_id_str,
-                    "status": "already_running",
-                    "message": "Planning already started by another user.",
+                    "status": "already_started",
+                    "message": "Planning already started.",
                 },
             )
         

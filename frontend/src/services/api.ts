@@ -67,6 +67,7 @@ export const API = {
   // Chat endpoints (WebSocket)
   chat: {
     chat: `${WS_BASE_URL}/chat`,
+    messages: (chatId: string) => `${BASE_URL}/chat/messages/${chatId}`,
     react: (messageId: string) => `${BASE_URL}/chat/messages/${messageId}/react`,
   },
 } as const;
