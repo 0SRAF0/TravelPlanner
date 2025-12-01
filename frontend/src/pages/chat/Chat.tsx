@@ -137,6 +137,12 @@ export function Chat() {
         const readyList = message.users_ready || [];
         setUsersReady(Array.isArray(readyList) ? readyList : []);
         setTotalUsers(message.total_users || 0);
+        
+        // When activity_voting phase is activated, refresh activity list
+        if (message.phase === 'activity_voting') {
+          console.log('[Chat] Activity voting phase activated, refreshing activity list...');
+          setActivityRefreshKey((prev) => prev + 1);
+        }
       }
       // Handle voting messages
       else if (message.type === 'voting') {

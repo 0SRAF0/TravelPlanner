@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Activity } from '../../types/activity';
 import Modal from '../modal/Modal';
 import GoogleMapEmbed from '../map/GoogleMapEmbed';
@@ -54,6 +54,24 @@ export default function ActivityCard({
 }: ActivityCardProps) {
   const [showModal, setShowModal] = useState(false);
   const [lastVote, setLastVote] = useState<'up' | 'down' | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Preload image on mount
+  useEffect(() => {
+    if (activity.photo_url) {
+      const img = new Image();
+      // Avoid sending Referer header to Google Photos endpoint to prevent blocked loads
+      img.referrerPolicy = 'no-referrer';
+      img.src = activity.photo_url;
+      img.onload = () => {
+        console.log('[ActivityCard] Image preloaded:', activity.name, activity.photo_url);
+        setImageLoaded(true);
+      };
+      img.onerror = () => {
+        console.error('[ActivityCard] Image failed to load:', activity.name, activity.photo_url);
+      };
+    }
+  }, [activity.photo_url, activity.name]);
 
   const colorSet = useMemo(() => {
     const randomIdx = Math.floor(Math.random() * COLOR_SETS.length);
@@ -82,11 +100,15 @@ export default function ActivityCard({
       >
         {/* Photo */}
         {activity.photo_url && (
-          <div className="w-full h-32 overflow-hidden">
+          <div className="w-full h-32 overflow-hidden bg-gray-200">
             <img
               src={activity.photo_url}
               alt={activity.name}
-              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                imageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+              onLoad={() => setImageLoaded(true)}
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
               }}
@@ -161,11 +183,15 @@ export default function ActivityCard({
         <div className="max-h-[85vh] overflow-y-auto" style={{ color: colorSet.secondary }}>
           {/* Photo in Modal */}
           {activity.photo_url && (
-            <div className="w-full h-64 -mx-6 -mt-6 mb-6 overflow-hidden">
+            <div className="w-full h-64 -mx-6 -mt-6 mb-6 overflow-hidden bg-gray-200">
               <img
                 src={activity.photo_url}
                 alt={activity.name}
-                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                  imageLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+                onLoad={() => setImageLoaded(true)}
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
