@@ -89,7 +89,37 @@ export function Chat() {
         
         if (data.code === 0 && data.data?.messages) {
           console.log(`[Chat] Loaded ${data.data.messages.length} historical messages`);
-          setMessages(data.data.messages);
+          
+          // Separate agent_status messages from regular messages
+          const regularMessages = [];
+          const agentStatusMap = new Map<string, AgentStatus>();
+          
+          for (const msg of data.data.messages) {
+            if (msg.type === 'agent_status') {
+              // Keep only the latest status for each agent
+              const agentName = msg.agent_name;
+              if (agentName) {
+                agentStatusMap.set(agentName, {
+                  agent_name: agentName,
+                  status: msg.status,
+                  step: msg.step,
+                  timestamp: msg.timestamp,
+                  progress: msg.progress,
+                  elapsed_seconds: msg.elapsed_seconds,
+                  step_history: []
+                });
+              }
+            } else {
+              regularMessages.push(msg);
+            }
+          }
+          
+          // Update states
+          setMessages(regularMessages);
+          if (agentStatusMap.size > 0) {
+            setAgentStatuses(Array.from(agentStatusMap.values()));
+            console.log(`[Chat] Loaded ${agentStatusMap.size} agent statuses`);
+          }
         }
       } catch (error) {
         console.error('[Chat] Failed to load historical messages:', error);
