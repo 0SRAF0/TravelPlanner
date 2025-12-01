@@ -19,6 +19,7 @@ interface TripData {
   destination?: string;
   trip_duration_days?: number;
   status: string;
+  orchestrator_status?: string;
   members: string[];
   members_with_preferences: string[];
   member_details: Member[];
@@ -159,6 +160,8 @@ export default function TripDetail() {
     try {
       const response = await fetch(API.trip.allIn, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trip_id: tripId }),
       });
 
       const result = await response.json();
@@ -298,11 +301,20 @@ export default function TripDetail() {
                       : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
                   </p>
                 </div>
-                <Button
-                  text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
-                  onClick={handleAllIn}
-                  size="lg"
-                />
+                {(['planning', 'consensus'].includes(trip.status) ||
+                  ['running', 'paused', 'completed'].includes(trip.orchestrator_status || '')) ? (
+                  <Button
+                    text="Go to Chat 💬"
+                    onClick={() => navigate(`/trip/chat/${tripId}`)}
+                    size="lg"
+                  />
+                ) : (
+                  <Button
+                    text={processingAllIn ? 'Processing...' : "Let's Go! 🚀"}
+                    onClick={handleAllIn}
+                    size="lg"
+                  />
+                )}
               </div>
             </div>
           )}
