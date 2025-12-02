@@ -86,14 +86,14 @@ export function Chat() {
       try {
         const response = await fetch(API.chat.messages(tripId));
         const data = await response.json();
-        
+
         if (data.code === 0 && data.data?.messages) {
           console.log(`[Chat] Loaded ${data.data.messages.length} historical messages`);
-          
+
           // Separate agent_status messages from regular messages
           const regularMessages = [];
           const agentStatusMap = new Map<string, AgentStatus>();
-          
+
           for (const msg of data.data.messages) {
             if (msg.type === 'agent_status') {
               // Keep only the latest status for each agent
@@ -106,14 +106,14 @@ export function Chat() {
                   timestamp: msg.timestamp,
                   progress: msg.progress,
                   elapsed_seconds: msg.elapsed_seconds,
-                  step_history: []
+                  step_history: [],
                 });
               }
             } else {
               regularMessages.push(msg);
             }
           }
-          
+
           // Update states
           setMessages(regularMessages);
           if (agentStatusMap.size > 0) {
@@ -252,7 +252,7 @@ export function Chat() {
         const readyList = message.users_ready || [];
         setUsersReady(Array.isArray(readyList) ? readyList : []);
         setTotalUsers(message.total_users || 0);
-        
+
         // When activity_voting phase is activated, refresh activity list
         if (message.phase === 'activity_voting') {
           console.log('[Chat] Activity voting phase activated, refreshing activity list...');
@@ -498,7 +498,10 @@ export function Chat() {
             </div>
 
             {/* Messages List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" ref={messagesContainerRef}>
+            <div
+              className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
+              ref={messagesContainerRef}
+            >
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-20">
                   <p className="text-lg">No messages yet</p>
@@ -646,23 +649,23 @@ export function Chat() {
                 </div>
                 {/* Voted Button - show whenever there's an active phase */}
                 {tripId && currentPhase && (
-                    <div className="justify-self-end">
-                      <VotedButton
-                        tripId={tripId}
-                        currentPhase={currentPhase}
-                        currentUserId={currentUser.id}
-                        usersReady={usersReady}
-                        totalUsers={totalUsers}
-                        buttonText={currentPhase === 'itinerary_approval' ? 'Approved' : 'Voted'}
-                        onStatusChange={(allReady: boolean) => {
-                          if (allReady) {
-                            console.log('All users ready! Phase can proceed.');
-                            // TODO: Trigger Consensus Agent to make decision
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
+                  <div className="justify-self-end">
+                    <VotedButton
+                      tripId={tripId}
+                      currentPhase={currentPhase}
+                      currentUserId={currentUser.id}
+                      usersReady={usersReady}
+                      totalUsers={totalUsers}
+                      buttonText={currentPhase === 'itinerary_approval' ? 'Approved' : 'Voted'}
+                      onStatusChange={(allReady: boolean) => {
+                        if (allReady) {
+                          console.log('All users ready! Phase can proceed.');
+                          // TODO: Trigger Consensus Agent to make decision
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto p-4">
                 {tripId ? (

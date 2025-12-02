@@ -137,7 +137,7 @@ export default function ActivityList({
             upvote_count: message.upvote_count,
             downvote_count: message.downvote_count,
           });
-          
+
           // Update the activity in the local state
           setActivities((prevActivities) =>
             prevActivities.map((activity) => {
@@ -156,7 +156,7 @@ export default function ActivityList({
                 downvote_count: message.downvote_count,
                 votes: mergedVotes,
               };
-            })
+            }),
           );
         }
       } catch (error) {

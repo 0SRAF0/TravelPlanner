@@ -301,8 +301,8 @@ export default function TripDetail() {
                       : `⏳ ${trip.members_with_preferences.length}/${trip.members.length} members have submitted preferences.`}
                   </p>
                 </div>
-                {(['planning', 'consensus'].includes(trip.status) ||
-                  ['running', 'paused', 'completed'].includes(trip.orchestrator_status || '')) ? (
+                {['planning', 'consensus'].includes(trip.status) ||
+                ['running', 'paused', 'completed'].includes(trip.orchestrator_status || '') ? (
                   <Button
                     text="Go to Chat 💬"
                     onClick={() => navigate(`/trip/chat/${tripId}`)}

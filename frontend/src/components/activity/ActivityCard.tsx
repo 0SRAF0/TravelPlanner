@@ -65,9 +65,7 @@ export default function ActivityCard({
       const uid = user?.id;
       if (!uid) return;
       const prevVote = (activity as any)?.votes?.[uid];
-      setLastVote((current) =>
-        prevVote === 'up' || prevVote === 'down' ? prevVote : current,
-      );
+      setLastVote((current) => (prevVote === 'up' || prevVote === 'down' ? prevVote : current));
     } catch {
       // No-op: keep current optimistic state if we cannot determine persisted vote
     }
