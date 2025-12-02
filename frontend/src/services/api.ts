@@ -3,7 +3,9 @@
  */
 
 // Base API URL - can be configured via environment variables
-export const BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'http://localhost:8060';
+// Remove trailing slash to prevent double slashes in endpoint URLs
+const rawBaseUrl = import.meta.env.VITE_APP_API_BASE_URL || 'http://localhost:8060';
+export const BASE_URL = rawBaseUrl.replace(/\/$/, '');
 
 // Derive WebSocket base URL from BASE_URL
 export const WS_BASE_URL = BASE_URL.startsWith('https')
@@ -41,6 +43,7 @@ export const API = {
     user: `${BASE_URL}/trips/user`,
     allIn: `${BASE_URL}/trips/all-in`,
     delete: `${BASE_URL}/trips`,
+    itinerary: (tripId: string) => `${BASE_URL}/trips/${tripId}/itinerary`,
     markReady: (tripId: string) => `${BASE_URL}/trips/${tripId}/phases/mark-ready`,
     unmarkReady: (tripId: string) => `${BASE_URL}/trips/${tripId}/phases/unmark-ready`,
     vote: (tripId: string) => `${BASE_URL}/trips/${tripId}/vote`,

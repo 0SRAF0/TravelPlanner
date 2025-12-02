@@ -1603,3 +1603,42 @@ async def submit_vote(trip_id: str, vote: VoteRequest):
     except Exception as e:
         print(f"[submit_vote] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{trip_id}/itinerary", response_model=APIResponse)
+async def get_trip_itinerary(trip_id: str):
+    """
+    Get the current itinerary for a trip.
+    Returns the most recent itinerary version marked as is_current=True.
+    """
+    try:
+        from app.db.database import get_itineraries_collection
+        
+        itineraries_collection = get_itineraries_collection()
+        
+        # Find the current itinerary for this trip
+        itinerary = await itineraries_collection.find_one(
+            {"trip_id": trip_id, "is_current": True},
+            sort=[("version", -1)]  # Get the latest version
+        )
+        
+        if not itinerary:
+            return APIResponse(
+                code=404,
+                msg="No itinerary found for this trip",
+                data=None
+            )
+        
+        # Convert ObjectId to string
+        if "_id" in itinerary:
+            itinerary["_id"] = str(itinerary["_id"])
+        
+        return APIResponse(
+            code=0,
+            msg="ok",
+            data=itinerary
+        )
+        
+    except Exception as e:
+        print(f"[get_trip_itinerary] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
