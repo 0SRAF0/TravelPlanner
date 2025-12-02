@@ -560,6 +560,128 @@ async def itinerary_agent_wrapper(state: AgentState) -> AgentState:
     print("\n[AGENT] Running itinerary_agent...")
     result = await itinerary_agent.app.ainvoke(state)
     print("[AGENT] itinerary_agent completed.")
+    # Persist itinerary to database (no approval gate)
+    try:
+        trip_id = result.get("trip_id") or state.get("trip_id")
+        agent_data = result.get("agent_data", {}) or {}
+        itinerary_days = agent_data.get("itinerary") or []
+        if trip_id and itinerary_days:
+            from app.db.database import get_itineraries_collection, get_database
+            from app.models.itinerary import Itinerary
+            from datetime import datetime
+            from bson import ObjectId
+
+            itineraries = get_itineraries_collection()
+
+            # Compute next version and mark previous current as false
+            existing_count = await itineraries.count_documents({"trip_id": str(trip_id)})
+            next_version = int(existing_count) + 1
+            await itineraries.update_many(
+                {"trip_id": str(trip_id), "is_current": True},
+                {"$set": {"is_current": False, "updated_at": datetime.utcnow()}},
+            )
+
+            # Build itinerary document
+            destination = (agent_data.get("destination") or state.get("agent_data", {}).get("destination")) or None
+            start_date = (state.get("agent_data", {}) or {}).get("start_date") or agent_data.get("start_date")
+            trip_duration_days = (state.get("agent_data", {}) or {}).get("trip_duration_days") or agent_data.get("trip_duration_days")
+
+            # Normalize days/items to avoid duplicating activity metadata in itinerary
+            # Keep only activity_id and scheduling info; fetch details from activities collection when needed
+            normalized_days = []
+            for day in itinerary_days or []:
+                # Grab day fields robustly from dict or pydantic
+                day_dict = dict(getattr(day, "dict", lambda: day)())
+                day_num = day_dict.get("day") or getattr(day, "day", None)
+                day_date = day_dict.get("date") or getattr(day, "date", None)
+                items = day_dict.get("items") or getattr(day, "items", []) or []
+                min_items = []
+                for it in items:
+                    it_dict = dict(getattr(it, "dict", lambda: it)())
+                    min_items.append({
+                        "activity_id": it_dict.get("activity_id") or getattr(it, "activity_id", None),
+                        "start_time": it_dict.get("start_time") or getattr(it, "start_time", None),
+                        "end_time": it_dict.get("end_time") or getattr(it, "end_time", None),
+                        "notes": it_dict.get("notes") or getattr(it, "notes", None),
+                        # status defaults to "planned" in the model; omit here
+                    })
+                normalized_days.append({
+                    "day": int(day_num) if day_num is not None else None,
+                    "date": day_date,
+                    "items": min_items
+                })
+
+            itinerary_doc = Itinerary(
+                trip_id=str(trip_id),
+                destination=destination,
+                version=next_version,
+                is_current=True,
+                status="proposed",
+                start_date=start_date,
+                trip_duration_days=trip_duration_days,
+                days=normalized_days,
+                accommodations=None,
+            )
+
+            res = await itineraries.insert_one(itinerary_doc.model_dump(exclude_none=True))
+            print(f"[orchestrator] ✅ Saved itinerary v{next_version} for trip {trip_id} (id={res.inserted_id})")
+
+            try:
+                db = get_database()
+                trips = db.trips
+                trip_doc = None
+                try:
+                    trip_doc = await trips.find_one({"_id": ObjectId(trip_id)})
+                except Exception:
+                    trip_doc = await trips.find_one({"trip_code": str(trip_id).upper()})
+                if trip_doc:
+                    phases = (trip_doc.get("phase_tracking") or {}).get("phases", {}) or {}
+                    ia = phases.get("itinerary_approval") or {}
+                    ia["status"] = "completed"
+                    ia["completed_at"] = datetime.utcnow()
+                    phases["itinerary_approval"] = ia
+                    await trips.update_one(
+                        {"_id": trip_doc["_id"]},
+                        {
+                            "$set": {
+                                "phase_tracking.phases": phases,
+                                "phase_tracking.current_phase": None,
+                                "updated_at": datetime.utcnow()
+                            }
+                        },
+                    )
+                # Broadcast completion (no approval step)
+                try:
+                    from app.router.chat import broadcast_to_chat
+                    await broadcast_to_chat(
+                        str(trip_id),
+                        {
+                            "type": "agent_status",
+                            "agent_name": "Itinerary Agent",
+                            "status": "completed",
+                            "step": f"Created {len(itinerary_days)} day(s) itinerary. Trip planning complete.",
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "progress": {"current": 3, "total": 3},
+                        },
+                    )
+                    await broadcast_to_chat(
+                        str(trip_id),
+                        {
+                            "senderId": "system",
+                            "senderName": "AI Assistant",
+                            "content": f"🧭 Your itinerary is ready (v{next_version})! Trip planning complete.",
+                            "type": "ai",
+                            "timestamp": datetime.utcnow().isoformat(),
+                        },
+                    )
+                except Exception as _broadcast_err:
+                    print(f"[orchestrator] Warning: failed to broadcast itinerary completion: {_broadcast_err}")
+            except Exception as e:
+                print(f"[orchestrator] Warning: failed to finalize itinerary phase: {e}")
+        else:
+            print("[orchestrator] No itinerary generated to persist")
+    except Exception as e:
+        print(f"[orchestrator] ❌ Failed to persist itinerary: {e}")
     return result
 
 

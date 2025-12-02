@@ -129,6 +129,7 @@ class ConsensusAgent:
         scored_activities.sort(key=lambda x: x.get("final_score", 0), reverse=True)
         
         # Select top 35 with category balance
+        # IMPORTANT: honor votes — include only activities with positive net votes
         selected = []
         category_counts = {}
         
@@ -138,7 +139,11 @@ class ConsensusAgent:
             # Max 7 per category for balance
             if category_counts.get(category, 0) >= 7:
                 continue
-            
+
+            # Require at least one more upvote than downvote (net_score >= 1)
+            if (activity.get("net_score", 0) or 0) < 1:
+                continue
+
             selected.append(activity)
             category_counts[category] = category_counts.get(category, 0) + 1
             
@@ -148,12 +153,19 @@ class ConsensusAgent:
         print(f"[consensus] Selected {len(selected)} activities")
         
         # Update agent_data with selection
+        # Include IDs for downstream filtering
+        agent_data["selected_activity_ids"] = [
+            str(a.get("_id") or a.get("activity_id") or "")
+            for a in selected
+            if (a.get("_id") or a.get("activity_id"))
+        ]
         agent_data["selected_activities"] = [
             {
+                "activity_id": str(a.get("_id") or a.get("activity_id") or ""),
                 "name": a.get("name"),
                 "category": a.get("category"),
                 "score": a.get("final_score"),
-                "net_score": a.get("net_score", 0)
+                "net_score": a.get("net_score", 0),
             }
             for a in selected
         ]
@@ -179,13 +191,14 @@ class ConsensusAgent:
             {
                 "$set": {
                     "phase_tracking.phases": phases,
-                    "phase_tracking.current_phase": "itinerary_approval",
+                    # Auto-complete itinerary approval: no approval gate
+                    "phase_tracking.current_phase": None,
                     "updated_at": datetime.utcnow()
                 }
             }
         )
         
-        # Trigger orchestrator to generate itinerary
+        # Trigger orchestrator to generate itinerary (no approval step)
         print(f"[consensus] Triggering orchestrator for itinerary generation")
         import asyncio
         asyncio.create_task(self._trigger_orchestrator_for_itinerary(trip_id, trip, agent_data))
@@ -218,10 +231,27 @@ class ConsensusAgent:
         col = get_activities_collection()
         activities = await col.find({"trip_id": trip_id}).to_list(length=None)
         
+        # Filter to only selected activity IDs (fallback to positive-vote items)
+        selected_ids = set([s for s in (agent_data.get("selected_activity_ids") or []) if s])
+        if selected_ids:
+            activities = [a for a in activities if str(a.get("_id")) in selected_ids]
+            print(f"[consensus] Filtering activities to selected IDs: {len(activities)} remain")
+        else:
+            # Fallback: keep only activities with positive net_score
+            pos = [a for a in activities if (a.get("net_score", 0) or 0) >= 1]
+            if pos:
+                print(f"[consensus] No explicit selected IDs; using {len(pos)} activities with positive votes")
+                activities = pos
+            else:
+                print(f"[consensus] No positive-vote activities; using top activities by score (fallback)")
+
         # Convert to activity_catalog format
         activity_catalog = []
         for activity in activities:
+            # Ensure required activity_id for itinerary agent
+            act_id = str(activity.get("_id") or activity.get("activity_id") or activity.get("name") or "")
             activity_catalog.append({
+                "activity_id": act_id,
                 "trip_id": trip_id,
                 "name": activity.get("name", ""),
                 "category": activity.get("category", "Other"),
@@ -233,9 +263,19 @@ class ConsensusAgent:
                 "fits": activity.get("fits", []),
                 "score": activity.get("score", 0.0),
                 "rationale": activity.get("rationale", ""),
+                "photo_url": activity.get("photo_url"),
             })
         
         print(f"[consensus] Loaded {len(activity_catalog)} activities for itinerary generation")
+
+        # Derive start_date from trip.selected_dates if available ("YYYY-MM-DD:YYYY-MM-DD")
+        start_date: str | None = None
+        try:
+            selected_dates_val = updated_trip.get("selected_dates")
+            if isinstance(selected_dates_val, str) and ":" in selected_dates_val:
+                start_date = selected_dates_val.split(":", 1)[0]
+        except Exception:
+            start_date = None
         
         initial_state: AgentState = {
             "trip_id": trip_id,
@@ -243,10 +283,13 @@ class ConsensusAgent:
             "agent_data": {
                 "destination": updated_trip.get("destination"),
                 "trip_duration_days": updated_trip.get("trip_duration_days"),
+                "start_date": start_date,
                 "phase_tracking": phase_tracking,
                 "activity_catalog": activity_catalog,
                 "selected_activities": agent_data.get("selected_activities"),
             },
+            # Provide start_date at top-level too
+            "start_date": start_date,
             "messages": [],
         }
         

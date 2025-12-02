@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../components/button/Button';
 import ActivityList from '../../components/activity/ActivityList';
-import VotedButton from '../../components/phase/VotedButton';
+import VotedButton from './components/VotedButton.tsx';
 import { API } from '../../services/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPaperPlane } from '@fortawesome/free-solid-svg-icons';

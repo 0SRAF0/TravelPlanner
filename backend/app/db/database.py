@@ -41,6 +41,7 @@ async def init_indexes():
         preferences_collection = get_preferences_collection()
         activities_collection = get_activities_collection()
         trips_collection = get_trips_collection()
+        itineraries_collection = get_itineraries_collection()
 
         # Users indexes
         await users_collection.create_index("google_id", unique=True)
@@ -61,6 +62,11 @@ async def init_indexes():
         await trips_collection.create_index("trip_code", unique=True)
         await trips_collection.create_index("creator_id")
         await trips_collection.create_index("members")
+
+        # Itineraries indexes
+        await itineraries_collection.create_index([("trip_id", 1), ("is_current", -1), ("version", -1)], name="trip_current_version")
+        await itineraries_collection.create_index([("trip_id", 1), ("status", 1)], name="trip_status")
+        await itineraries_collection.create_index([("trip_id", 1), ("days.date", 1)], name="trip_day_date")
 
         print("✅ Database indexes created successfully")
     except Exception as e:
@@ -126,3 +132,11 @@ def get_trips_collection():
     """
     db = get_database()
     return db.trips
+
+
+def get_itineraries_collection():
+    """
+    Get the itineraries collection from the database
+    """
+    db = get_database()
+    return db.itineraries

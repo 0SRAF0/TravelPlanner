@@ -57,25 +57,21 @@ export default function ActivityCard({
   const [lastVote, setLastVote] = useState<'up' | 'down' | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  // Rehydrate user's previous vote from persisted activity.votes
+  // Rehydrate user's previous vote from persisted activity.votes.
+  // Important: Only react to vote-map changes so score-only updates don't clear selection.
   useEffect(() => {
     try {
       const user = authService.getUser() || JSON.parse(localStorage.getItem('user_info') || '{}');
       const uid = user?.id;
-      if (!uid) {
-        setLastVote(null);
-        return;
-      }
+      if (!uid) return;
       const prevVote = (activity as any)?.votes?.[uid];
-      if (prevVote === 'up' || prevVote === 'down') {
-        setLastVote(prevVote);
-      } else {
-        setLastVote(null);
-      }
+      setLastVote((current) =>
+        prevVote === 'up' || prevVote === 'down' ? prevVote : current,
+      );
     } catch {
-      setLastVote(null);
+      // No-op: keep current optimistic state if we cannot determine persisted vote
     }
-  }, [activity]);
+  }, [activity?.votes]);
 
   // Preload image on mount
   useEffect(() => {

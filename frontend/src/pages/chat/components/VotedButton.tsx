@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import Button from '../button/Button';
-import { API } from '../../services/api';
+import Button from '../../../components/button/Button.tsx';
+import { API } from '../../../services/api.ts';
 
 interface VotedButtonProps {
   tripId: string;
