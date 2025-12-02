@@ -27,6 +27,10 @@ export const ItineraryActivity: React.FC<ItineraryActivityProps> = ({ item }) =>
                     </div>
                 </div>
 
+                {item.name && (
+                    <h4 className="text-lg font-bold text-gray-900 mb-1">{item.name}</h4>
+                )}
+
                 <p className="text-gray-700 leading-relaxed">{item.notes}</p>
 
                 {/* Placeholder for activity details if we had them linked */}

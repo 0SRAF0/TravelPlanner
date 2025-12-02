@@ -600,6 +600,7 @@ async def itinerary_agent_wrapper(state: AgentState) -> AgentState:
                     it_dict = dict(getattr(it, "dict", lambda: it)())
                     min_items.append({
                         "activity_id": it_dict.get("activity_id") or getattr(it, "activity_id", None),
+                        "name": it_dict.get("name") or getattr(it, "name", None),
                         "start_time": it_dict.get("start_time") or getattr(it, "start_time", None),
                         "end_time": it_dict.get("end_time") or getattr(it, "end_time", None),
                         "notes": it_dict.get("notes") or getattr(it, "notes", None),
