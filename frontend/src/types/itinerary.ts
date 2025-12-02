@@ -10,6 +10,7 @@ export interface ItineraryItem {
     category?: string;
     rough_cost?: number;
     duration_min?: number;
+    photo_url?: string | null;
 }
 
 export interface ItineraryDay {

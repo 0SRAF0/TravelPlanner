@@ -221,7 +221,7 @@ export default function TripDetail() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-1">{trip.trip_name}</h1>
-              {trip.destination && <p className="text-lg text-gray-600">📍 {trip.destination}</p>}
+              {trip.destination && <p className="text-lg text-gray-600">📍 {(trip.destination || '').toUpperCase()}</p>}
               {trip.trip_duration_days && (
                 <p className="text-sm text-gray-500">🗓️ {trip.trip_duration_days} days</p>
               )}
