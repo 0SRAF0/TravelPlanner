@@ -639,7 +639,7 @@ export function Chat() {
           <div className="lg:col-span-3 flex flex-col gap-6 min-h-0">
             {/* Interactive Area - 70% */}
             <div className="flex-[7] overflow-hidden flex flex-col min-h-0">
-              <div className="p-5 items-center">
+              <div className="p-5 grid grid-cols-3 items-center">
                 <div></div>
                 <div className="text-center">
                   <h2 className="text-xl font-bold text-gray-900">Interactive Space</h2>
@@ -686,7 +686,7 @@ export function Chat() {
             </div>
 
             {/* Agent Status Area - 30% */}
-            <div className="flex-[7] overflow-hidden flex flex-col min-h-0">
+            <div className="flex-[6] overflow-hidden flex flex-col min-h-0">
               <div className="p-4">
                 <h2 className="text-base font-bold text-gray-900">🤖 AI Agent Status</h2>
               </div>

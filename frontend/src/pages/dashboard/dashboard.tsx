@@ -275,7 +275,7 @@ const Dashboard = () => {
                     </button>
                     <p className="text-lg font-semibold text-gray-700">{trip.trip_name}</p>
                     {trip.destination && (
-                      <p className="text-sm text-gray-500 mt-1">📍 {trip.destination}</p>
+                      <p className="text-sm text-gray-500 mt-1">📍 {(trip.destination || '').toUpperCase()}</p>
                     )}
                     <p className="text-xs text-gray-400 mt-2">{trip.members.length} members</p>
                   </div>
@@ -340,7 +340,7 @@ const Dashboard = () => {
                       {trip.trip_name}
                     </p>
                     {trip.destination && (
-                      <p className="text-sm text-gray-500 text-center">📍 {trip.destination}</p>
+                      <p className="text-sm text-gray-500 text-center">📍 {(trip.destination || '').toUpperCase()}</p>
                     )}
                     <p className="text-xs text-gray-400 text-center mt-2">
                       {trip.members.length} members

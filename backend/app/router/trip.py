@@ -1632,7 +1632,47 @@ async def get_trip_itinerary(trip_id: str):
         # Convert ObjectId to string
         if "_id" in itinerary:
             itinerary["_id"] = str(itinerary["_id"])
-        
+
+        # Append activity data into each itinerary item for convenience on the client
+        # We keep itinerary storage lean (only ids + schedule), but enrich on read.
+        try:
+            activities_col = get_activities_collection()
+            activities = await activities_col.find({"trip_id": trip_id}).to_list(length=None)
+            id_to_activity = {str(a.get("_id")): a for a in activities if a.get("_id")}
+            name_to_activity = {str(a.get("name", "")).strip().lower(): a for a in activities if a.get("name")}
+
+            for day in itinerary.get("days", []) or []:
+                for item in day.get("items", []) or []:
+                    act = None
+                    act_id = item.get("activity_id")
+                    if act_id and act_id in id_to_activity:
+                        act = id_to_activity[act_id]
+                    else:
+                        # Fallback join by name if id not present (older data)
+                        nm = str(item.get("name", "")).strip().lower()
+                        if nm:
+                            act = name_to_activity.get(nm)
+
+                    if not act:
+                        continue
+
+                    # Only fill in missing or optional fields to avoid clobbering edits
+                    if not item.get("name") and act.get("name") is not None:
+                        item["name"] = act.get("name")
+                    if act.get("category") is not None:
+                        item["category"] = act.get("category")
+                    if act.get("lat") is not None:
+                        item["lat"] = act.get("lat")
+                    if act.get("lng") is not None:
+                        item["lng"] = act.get("lng")
+                    if act.get("rough_cost") is not None:
+                        item["rough_cost"] = act.get("rough_cost")
+                    if act.get("duration_min") is not None:
+                        item["duration_min"] = act.get("duration_min")
+        except Exception as e:
+            # Non-fatal: continue returning the itinerary even if enrichment fails
+            print(f"[get_trip_itinerary] Warning: failed to append activity data: {e}")
+
         return APIResponse(
             code=0,
             msg="ok",
