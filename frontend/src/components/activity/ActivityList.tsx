@@ -140,16 +140,23 @@ export default function ActivityList({
           
           // Update the activity in the local state
           setActivities((prevActivities) =>
-            prevActivities.map((activity) =>
-              activity.name === message.activity_name
-                ? {
-                    ...activity,
-                    net_score: message.net_score,
-                    upvote_count: message.upvote_count,
-                    downvote_count: message.downvote_count,
-                  }
-                : activity
-            )
+            prevActivities.map((activity) => {
+              if (activity.name !== message.activity_name) return activity;
+              // Merge vote into local votes map so cards can rehydrate without losing selection
+              const mergedVotes = { ...(activity.votes || {}) };
+              if (message.vote === 'up' || message.vote === 'down') {
+                if (message.user_id) mergedVotes[message.user_id] = message.vote;
+              } else if (message.user_id && mergedVotes[message.user_id]) {
+                delete mergedVotes[message.user_id];
+              }
+              return {
+                ...activity,
+                net_score: message.net_score,
+                upvote_count: message.upvote_count,
+                downvote_count: message.downvote_count,
+                votes: mergedVotes,
+              };
+            })
           );
         }
       } catch (error) {

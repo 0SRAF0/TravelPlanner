@@ -29,7 +29,7 @@ class VoteRequest(BaseModel):
 
 
 async def run_orchestrator_background(
-    trip_id: str, destination: str, trip_duration_days: int, selected_dates: str
+    trip_id: str, destination: str, trip_duration_days: int, selected_dates: str, activity_catalog: list[dict] | None = None
 ):
     """
     Run the orchestrator agent in the background and broadcast updates to chat.
@@ -95,6 +95,15 @@ async def run_orchestrator_background(
         },
     )
 
+    # Derive start_date from selected_dates ("YYYY-MM-DD:YYYY-MM-DD")
+    start_date: str | None = None
+    try:
+        if isinstance(selected_dates, str) and ":" in selected_dates:
+            start_date = selected_dates.split(":", 1)[0]
+    except Exception:
+        # Non-fatal: leave start_date as None
+        start_date = None
+
     # Update status: analyzing preferences
     await broadcast_agent_status("Preference Agent", "running", "Fetching user preferences from database", progress={"current": 0, "total": 3})
 
@@ -114,8 +123,12 @@ async def run_orchestrator_background(
         "agent_data": {
             "destination": destination,
             "trip_duration_days": trip_duration_days,
+            "start_date": start_date,
             "phase_tracking": phase_tracking,  # Pass phase_tracking so orchestrator can route to consensus
+            **({"activity_catalog": activity_catalog} if activity_catalog else {}),
         },
+        # Provide start_date at top-level as well so downstream agents can pick it up
+        "start_date": start_date,
         "broadcast_callback": broadcast_agent_status,  # Pass broadcast function to agents
     }
 
@@ -1366,6 +1379,77 @@ async def unmark_user_ready(
         print(f"[unmark_user_ready] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/{trip_id}/itinerary/generate", response_model=APIResponse)
+async def generate_itinerary_now(trip_id: str):
+    """
+    Manually (re)generate itinerary for a trip.
+    - Loads current trip + activities from DB
+    - Starts orchestrator in background with activity_catalog prefilled
+    """
+    try:
+        db = get_database()
+        trips_collection = db.trips
+        try:
+            trip_doc = await trips_collection.find_one({"_id": ObjectId(trip_id)})
+        except Exception:
+            trip_doc = await trips_collection.find_one({"trip_code": trip_id.upper()})
+        if not trip_doc:
+            raise HTTPException(status_code=404, detail=f"Trip {trip_id} not found")
+
+        trip_id_str = str(trip_doc["_id"])
+        destination = trip_doc.get("destination")
+        trip_duration_days = trip_doc.get("trip_duration_days") or 3
+        selected_dates = trip_doc.get("selected_dates")
+
+        # Load activities to pass as catalog (include required activity_id)
+        activities_col = get_activities_collection()
+        activities = await activities_col.find({"trip_id": trip_id_str}).to_list(length=None)
+        # Prefer activities with positive votes; fallback to all if none
+        voted = [a for a in activities if (a.get("net_score", 0) or 0) >= 1]
+        activities_for_catalog = voted if voted else activities
+        activity_catalog: list[dict] = []
+        for a in activities_for_catalog:
+            act_id = str(a.get("_id") or a.get("name") or "")
+            activity_catalog.append({
+                "activity_id": act_id,
+                "trip_id": trip_id_str,
+                "name": a.get("name", ""),
+                "category": a.get("category", "Other"),
+                "rough_cost": a.get("rough_cost"),
+                "duration_min": a.get("duration_min"),
+                "lat": a.get("lat"),
+                "lng": a.get("lng"),
+                "tags": a.get("tags", []),
+                "fits": a.get("fits", []),
+                "score": a.get("score", 0.0),
+                "rationale": a.get("rationale", ""),
+                "photo_url": a.get("photo_url"),
+            })
+
+        # Kick orchestrator with prefilled catalog to generate itinerary
+        import asyncio
+        asyncio.create_task(
+            run_orchestrator_background(
+                trip_id_str, destination, int(trip_duration_days), selected_dates, activity_catalog
+            )
+        )
+
+        return APIResponse(
+            code=0,
+            msg="ok",
+            data={
+                "trip_id": trip_id_str,
+                "status": "started",
+                "activities": len(activity_catalog),
+                "message": "Itinerary generation started. Watch chat for updates."
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[generate_itinerary_now] Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start itinerary generation: {str(e)}")
 
 @router.post("/{trip_id}/vote")
 async def submit_vote(trip_id: str, vote: VoteRequest):

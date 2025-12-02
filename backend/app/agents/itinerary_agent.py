@@ -8,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 import time
 import json
+from datetime import datetime, timedelta
 
 from app.agents.agent_state import AgentState
 from app.agents.destination_research_agent import Activity, PreferencesSummaryIn
@@ -340,6 +341,18 @@ class ItineraryAgent:
             agent_data.update(out.dict())
             state["agent_data"] = agent_data
             return state
+
+        # Fallback normalization: if start_date is provided, ensure sequential day dates
+        try:
+            if input_data.start_date:
+                base_date = datetime.fromisoformat(str(input_data.start_date))
+                for idx, day in enumerate(result.itinerary or []):
+                    expected_date = (base_date + timedelta(days=idx)).date().isoformat()
+                    # Always align to expected_date to avoid placeholder dates from LLMs
+                    day.date = expected_date
+        except Exception as _date_err:
+            # Non-fatal: leave dates as produced if normalization fails
+            print(f"[{AGENT_LABEL}] Warning: failed to normalize dates: {_date_err}")
 
         metrics = dict(result.metrics or {})
         total_activities = sum(len(day.items) for day in result.itinerary)
