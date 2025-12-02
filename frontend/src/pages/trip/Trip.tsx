@@ -4,6 +4,8 @@ import Button from '../../components/button/Button';
 import Notification from '../../components/notification/Notification';
 import { API } from '../../services/api';
 import ConfirmProceedModal from './components/ConfirmProceedModal.tsx';
+import { ItineraryDisplay } from '../../components/itinerary';
+import type { Itinerary } from '../../types/itinerary';
 
 interface Member {
   user_id: string;
@@ -39,10 +41,31 @@ export default function Trip() {
   const [processingAllIn, setProcessingAllIn] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingMembers, setPendingMembers] = useState<{ name: string; picture?: string }[]>([]);
+  const [mockItinerary, setMockItinerary] = useState<Itinerary | null>(null);
   const fetchTripDetailsRef = useRef<(() => Promise<void>) | null>(null);
 
   const currentUser = JSON.parse(localStorage.getItem('user_info') || '{}');
   const hasSubmitted = trip?.members_with_preferences.includes(currentUser.id) || false;
+
+  // Fetch itinerary for the trip
+  const fetchItinerary = useCallback(async () => {
+    if (!tripId || tripId === 'undefined') return;
+
+    try {
+      const response = await fetch(API.trip.itinerary(tripId));
+      const result = await response.json();
+
+      if (result.code === 0 && result.data) {
+        setMockItinerary(result.data);
+      } else if (result.code === 404) {
+        // No itinerary yet - this is normal
+        setMockItinerary(null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch itinerary:', err);
+      setMockItinerary(null);
+    }
+  }, [tripId]);
 
   const fetchTripDetails = useCallback(async () => {
     // Protect against invalid tripId values (e.g. the literal string 'undefined')
@@ -80,7 +103,8 @@ export default function Trip() {
 
   useEffect(() => {
     fetchTripDetails();
-  }, [fetchTripDetails]);
+    fetchItinerary(); // Fetch itinerary on mount
+  }, [fetchTripDetails, fetchItinerary]);
 
   // WebSocket listener for all-in navigation broadcast and member updates
   useEffect(() => {
@@ -122,6 +146,12 @@ export default function Trip() {
         if (data.type === 'preference_submitted') {
           console.log('[Trip] Member submitted preferences, refreshing trip details...');
           fetchTripDetailsRef.current?.();
+        }
+
+        // Refresh itinerary when it's created or updated
+        if (data.type === 'ai' && data.content?.includes('itinerary')) {
+          console.log('[Trip] Itinerary update detected, refreshing...');
+          fetchItinerary();
         }
       } catch (error) {
         console.error('[Trip] WebSocket message parse error:', error);
@@ -275,11 +305,10 @@ export default function Trip() {
             {trip.member_details.map((member) => (
               <div
                 key={member.user_id}
-                className={`flex items-center gap-3 p-3 rounded-xl border-2 ${
-                  member.has_submitted_preferences
-                    ? 'border-green-200 bg-green-50'
-                    : 'border-gray-200 bg-gray-50'
-                }`}
+                className={`flex items-center gap-3 p-3 rounded-xl border-2 ${member.has_submitted_preferences
+                  ? 'border-green-200 bg-green-50'
+                  : 'border-gray-200 bg-gray-50'
+                  }`}
               >
                 {member.picture ? (
                   <img src={member.picture} alt={member.name} className="w-10 h-10 rounded-full" />
@@ -312,7 +341,7 @@ export default function Trip() {
                   </p>
                 </div>
                 {['planning', 'consensus'].includes(trip.status) ||
-                ['running', 'paused', 'completed'].includes(trip.orchestrator_status || '') ? (
+                  ['running', 'paused', 'completed'].includes(trip.orchestrator_status || '') ? (
                   <Button
                     text="Go to Chat 💬"
                     onClick={() => navigate(`/trip/chat/${tripId}`)}
@@ -329,6 +358,13 @@ export default function Trip() {
             </div>
           )}
         </div>
+
+        {/* Itinerary Display */}
+        {mockItinerary && (
+          <div className="mb-6">
+            <ItineraryDisplay itinerary={mockItinerary} />
+          </div>
+        )}
       </div>
 
       <Notification
@@ -350,3 +386,4 @@ export default function Trip() {
     </div>
   );
 }
+
