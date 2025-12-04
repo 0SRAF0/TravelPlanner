@@ -43,3 +43,10 @@ A coordinated pipeline of specialized agents that turns surveys and chats into a
 * **Fair by design**: everyone’s voice counted, conflicts mediated
 * **Cheaper trips**: live deals and budget control
 * **Full transparency**: who’s paying what, what’s decided, what’s left 
+
+## Get started with your app
+
+Setup and run instructions are separated per service:
+
+- Backend: see [backend/README.md](backend/README.md)
+- Frontend: see [frontend/README.md](frontend/README.md)
